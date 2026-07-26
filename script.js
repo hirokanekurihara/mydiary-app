@@ -203,14 +203,14 @@ function initPinScreen() {
 
    if (bioAvailable && !isPinLocked()) {
   setPinScreenUI('bio');
-  document.getElementById('pin-message').textContent = 'ボタンをタップして認証してください';
-  // ★自動起動は一時的に無効化（原因を特定するまでコメントアウトしておく）
-  // setTimeout(() => { triggerBiometricAuth(); }, 500);
+  document.getElementById('pin-message').textContent = 'Face ID / Touch ID で認証しています…';
+  setTimeout(() => { triggerBiometricAuth(); }, 400);
 } else {
   setPinScreenUI('pin');
   document.getElementById('pin-title').textContent = 'PINコードを入力';
   document.getElementById('pin-message').textContent = '4桁のPINを入力してください';
 }
+
 
   } else {
     pinState.mode = 'setup1';
@@ -1441,20 +1441,19 @@ function setPinScreenUI(mode) {
   const bioContainer = document.getElementById('biometric-container');
 
   if (mode === 'bio') {
-    // 生体認証モード：PINキーパッドを確実に隠す（style.displayで直接指定）
+    // 生体認証モード：PINキーパッドとボタンの両方を隠し、メッセージのみ表示する
     pinDots.style.display = 'none';
     pinKeypad.style.display = 'none';
-    bioContainer.hidden = false;
-    document.getElementById('btn-bio-auth').textContent = '😎 Face ID / Touch ID で開く';
+    bioContainer.hidden = true; // ボタンは表示しない（自動実行のみで完結させる）
     document.getElementById('pin-title').textContent = 'ロック解除';
-    document.getElementById('pin-message').textContent = 'Face ID / Touch ID で認証してください';
   } else {
-    // PINモード：キーパッドを表示し、生体認証ボタンを隠す
+    // PINモード：キーパッドを表示する
     pinDots.style.display = '';
     pinKeypad.style.display = '';
     bioContainer.hidden = true;
   }
 }
+
 
 /** 生体認証を3回失敗した際に、PIN入力モードへ切り替える */
 function switchToPinAfterBioFail() {
@@ -1470,24 +1469,22 @@ function switchToPinAfterBioFail() {
 async function triggerBiometricAuth() {
   try {
     await verifyBiometric();
+    // 成功時はverifyBiometric()の内部でunlockApp()が呼ばれるため、ここには戻ってきません
   } catch (err) {
-    console.error('生体認証エラー', err);
+    console.error('生体認証エラー', err.name, err.message);
     bioFailCount++;
 
-    // ★診断用：エラーの詳細を一時的に画面へ表示する（原因が分かったら削除してOK）
-    const debugMsg = `[${err.name || 'UnknownError'}] ${err.message || ''}`;
-
     if (bioFailCount >= MAX_BIO_FAIL) {
-      showToast('生体認証に3回失敗したため、PIN入力に切り替えます');
+      // 3回失敗→ボタンを経由せず、自動的にPIN入力画面へ切り替える
       switchToPinAfterBioFail();
     } else {
-      const remain = MAX_BIO_FAIL - bioFailCount;
-      document.getElementById('pin-message').textContent =
-        `認証に失敗（あと${remain}回でPINに切替）\n${debugMsg}`;
-      document.getElementById('btn-bio-auth').textContent = '🔄 もう一度試す';
+      // 1〜2回目の失敗→ボタンは表示せず、少し待って自動的に再試行する
+      document.getElementById('pin-message').textContent = 'もう一度試しています…';
+      setTimeout(() => { triggerBiometricAuth(); }, 800);
     }
   }
 }
+
 
 
 
