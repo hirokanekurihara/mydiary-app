@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>日記アプリ</title>
+<meta name="theme-color" content="#4a7c6f">
+<link rel="stylesheet" href="style.css">
+<!-- jsPDF (PDF出力用) -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ============ PINロック画面 ============ -->
+<section id="pin-screen" class="screen pin-screen">
+  <div class="pin-card">
+    <div class="pin-icon">🔒</div>
+    <h1 id="pin-title">PINコードを入力</h1>
+    <p id="pin-message" class="pin-message"></p>
+    <div class="pin-dots" id="pin-dots">
+      <span class="pin-dot"></span>
+      <span class="pin-dot"></span>
+      <span class="pin-dot"></span>
+      <span class="pin-dot"></span>
+    </div>
+    <div class="pin-keypad" id="pin-keypad">
+      <button type="button" class="pin-key" data-key="1">1</button>
+      <button type="button" class="pin-key" data-key="2">2</button>
+      <button type="button" class="pin-key" data-key="3">3</button>
+      <button type="button" class="pin-key" data-key="4">4</button>
+      <button type="button" class="pin-key" data-key="5">5</button>
+      <button type="button" class="pin-key" data-key="6">6</button>
+      <button type="button" class="pin-key" data-key="7">7</button>
+      <button type="button" class="pin-key" data-key="8">8</button>
+      <button type="button" class="pin-key" data-key="9">9</button>
+      <button type="button" class="pin-key pin-key-empty" disabled></button>
+      <button type="button" class="pin-key" data-key="0">0</button>
+      <button type="button" class="pin-key pin-key-del" data-key="del">⌫</button>
+    </div>
+        <!-- ★追加：Face ID / Touch ID ボタン -->
+    <div id="biometric-container" class="biometric-container" hidden>
+      <button type="button" id="btn-bio-auth" class="btn btn-secondary btn-block btn-bio">
+        😎 Face ID / Touch ID で開く
+      </button>
+    </div>
+
+    <p id="pin-lock-msg" class="pin-lock-msg" hidden></p>
+
+    <p id="pin-lock-msg" class="pin-lock-msg" hidden></p>
+  </div>
+</section>
+
+<!-- ============ アプリ本体 ============ -->
+<div id="app" class="app" hidden>
+
+  <header class="app-header">
+    <h1>📔 日記アプリ</h1>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ---- 書くタブ ---- -->
+    <section id="view-write" class="view active-view">
+      <h2 class="view-title">新しい記録</h2>
+      <form id="entry-form" class="entry-form">
+        <div class="form-row">
+          <label for="entry-title">タイトル <span class="required">必須</span></label>
+          <input type="text" id="entry-title" placeholder="今日の見出し" required maxlength="100">
+        </div>
+        <div class="form-row">
+          <label for="entry-body">本文 <span class="required">必須</span></label>
+          <textarea id="entry-body" rows="6" placeholder="今日の出来事や気持ちを書きましょう" required></textarea>
+        </div>
+        <div class="form-row">
+          <label>気分</label>
+          <div class="mood-picker" id="mood-picker">
+            <button type="button" class="mood-btn" data-mood="1" aria-label="とても悪い">😢</button>
+            <button type="button" class="mood-btn" data-mood="2" aria-label="悪い">😟</button>
+            <button type="button" class="mood-btn" data-mood="3" aria-label="ふつう">😐</button>
+            <button type="button" class="mood-btn" data-mood="4" aria-label="良い">🙂</button>
+            <button type="button" class="mood-btn" data-mood="5" aria-label="とても良い">😊</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>タグ</label>
+          <div class="tag-chips" id="tag-chips-input">
+            <button type="button" class="tag-chip" data-tag="仕事">仕事</button>
+            <button type="button" class="tag-chip" data-tag="プライベート">プライベート</button>
+            <button type="button" class="tag-chip" data-tag="健康">健康</button>
+            <button type="button" class="tag-chip" data-tag="アイデア">アイデア</button>
+            <button type="button" class="tag-chip" data-tag="その他">その他</button>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">保存する</button>
+      </form>
+    </section>
+
+    <!-- ---- 一覧タブ ---- -->
+    <section id="view-list" class="view">
+      <h2 class="view-title">記録一覧</h2>
+      <div class="list-controls">
+        <input type="date" id="list-date-picker" class="date-input">
+      </div>
+      <ul id="entry-list" class="entry-list"></ul>
+      <p id="entry-list-empty" class="empty-msg" hidden>この日の記録はまだありません。</p>
+      <button type="button" id="btn-pdf-day" class="btn btn-secondary btn-block">📄 この日をPDF出力</button>
+    </section>
+
+    <!-- ---- カレンダータブ ---- -->
+    <section id="view-calendar" class="view">
+      <h2 class="view-title">カレンダー</h2>
+      <div class="calendar-header">
+        <button type="button" id="cal-prev" class="btn btn-icon">‹</button>
+        <span id="cal-month-label" class="cal-month-label"></span>
+        <button type="button" id="cal-next" class="btn btn-icon">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+      </div>
+      <div id="calendar-grid" class="calendar-grid"></div>
+    </section>
+
+    <!-- ---- 検索タブ ---- -->
+    <section id="view-search" class="view">
+      <h2 class="view-title">検索</h2>
+      <div class="search-form">
+        <div class="form-row">
+          <label for="search-keyword">キーワード</label>
+          <input type="text" id="search-keyword" placeholder="タイトル・本文から検索">
+        </div>
+        <div class="form-row form-row-range">
+          <div>
+            <label for="search-date-from">開始日</label>
+            <input type="date" id="search-date-from" class="date-input">
+          </div>
+          <div>
+            <label for="search-date-to">終了日</label>
+            <input type="date" id="search-date-to" class="date-input">
+          </div>
+        </div>
+        <div class="form-row">
+          <label>タグ（OR条件）</label>
+          <div class="tag-chips" id="tag-chips-search">
+            <button type="button" class="tag-chip" data-tag="仕事">仕事</button>
+            <button type="button" class="tag-chip" data-tag="プライベート">プライベート</button>
+            <button type="button" class="tag-chip" data-tag="健康">健康</button>
+            <button type="button" class="tag-chip" data-tag="アイデア">アイデア</button>
+            <button type="button" class="tag-chip" data-tag="その他">その他</button>
+          </div>
+        </div>
+        <button type="button" id="btn-search" class="btn btn-primary btn-block">検索する</button>
+      </div>
+      <ul id="search-result-list" class="entry-list"></ul>
+      <p id="search-result-empty" class="empty-msg" hidden>該当する記録がありません。</p>
+    </section>
+
+
+    <section id="view-racket" class="view">
+  <h2 class="view-title">🎭 ラケット感情分析</h2>
+
+  <!-- 一覧モード -->
+  <div id="racket-list-view">
+    <p class="settings-info">「一覧」タブの各記録にある「🎭 ラケット感情へ」ボタンを押すと、ここに追加されます。</p>
+    <ul id="racket-list" class="racket-entry-list"></ul>
+    <p id="racket-list-empty" class="empty-msg" hidden>まだラケット感情の記録がありません。</p>
+  </div>
+
+  <!-- 入力・編集モード -->
+  <div id="racket-form-view" hidden>
+    <button type="button" id="racket-back-btn" class="btn btn-secondary racket-back-btn">← 一覧へ戻る</button>
+    <form id="racket-form" class="entry-form">
+      <input type="hidden" id="racket-target-id">
+      <p class="settings-info">対象の記録：<strong id="racket-target-title"></strong>（<span id="racket-target-date"></span>）</p>
+      <div class="form-row">
+        <label for="racket-event">① 何があったか（出来事）</label>
+        <textarea id="racket-event" rows="5"></textarea>
+      </div>
+      <div class="form-row">
+        <label for="racket-thought">② その時の考え</label>
+        <textarea id="racket-thought" rows="4" placeholder="あとから記入できます"></textarea>
+      </div>
+      <div class="form-row">
+        <label for="racket-feeling">③ その時の感情</label>
+        <textarea id="racket-feeling" rows="4" placeholder="あとから記入できます"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">💾 保存する</button>
+    </form>
+  </div>
+</section>
+
+
+    <!-- ---- 設定タブ ---- -->
+    <section id="view-settings" class="view">
+      <h2 class="view-title">設定・バックアップ</h2>
+
+      <div class="settings-card">
+        <h3>バックアップ</h3>
+        <p id="last-backup-info" class="settings-info">前回バックアップ：まだありません</p>
+        <p id="backup-warning" class="backup-warning" hidden>⚠️ バックアップをおすすめします</p>
+        <button type="button" id="btn-backup" class="btn btn-primary btn-block">📦 バックアップ（エクスポート）</button>
+      </div>
+
+      <div class="settings-card">
+        <h3>インポート（復元）</h3>
+        <p class="settings-info">JSONファイルから復元します。既存のデータは全て置き換えられます。</p>
+        <input type="file" id="import-file-input" accept="application/json" hidden>
+        <button type="button" id="btn-import" class="btn btn-secondary btn-block">📥 インポート</button>
+      </div>
+
+      <div class="settings-card">
+       
+  <h3>🏷 タグの管理</h3>
+  <p class="settings-info">日記に付けるタグを自由に追加・削除できます。削除しても、過去に付けたタグはそのまま残ります。</p>
+  <div class="tag-manage-form">
+    <input type="text" id="new-tag-input" placeholder="新しいタグ名" maxlength="20">
+    <button type="button" id="btn-add-tag" class="btn btn-primary">追加</button>
+  </div>
+  <div id="settings-tag-list" class="tag-manage-list"></div>
+</div>
+
+<div class="settings-card">
+  <h3>🔄 タブの並び替え</h3>
+  <p class="settings-info">画面下のタブの表示順を変更できます（⚙️設定タブは常に右端に固定されます）。</p>
+  <div id="tab-order-list" class="tab-order-list"></div>
+</div>
+<div class="settings-card">
+  <h3>😎 生体認証（Face ID / Touch ID）</h3>
+  <p class="settings-info">パスコードの代わりに、Face IDやTouch IDでアプリを開けるようにします（事前にPINが設定されている必要があります）。</p>
+  <p id="bio-support-msg" class="settings-info" hidden>⚠️ お使いの端末・ブラウザは生体認証に対応していません</p>
+  <button type="button" id="btn-register-bio" class="btn btn-primary btn-block">生体認証を登録する</button>
+  <button type="button" id="btn-remove-bio" class="btn btn-danger btn-block" hidden>生体認証の登録を解除</button>
+</div>
+
+
+ <h3>PIN変更</h3>
+        <p class="settings-info">現在のPINを解除して、次回起動時に新しいPINを設定できるようにします。</p>
+        <button type="button" id="btn-reset-pin" class="btn btn-danger btn-block">🔑 PINをリセット</button>
+      </div>
+      <div class="settings-card">
+
+    </section>
+
+  </main>
+
+  <nav class="tab-bar">
+    <button type="button" class="tab-btn active" data-view="view-write">
+      <span class="tab-icon">✏️</span><span class="tab-label">書く</span>
+    </button>
+    <button type="button" class="tab-btn" data-view="view-list">
+      <span class="tab-icon">📋</span><span class="tab-label">一覧</span>
+    </button>
+    <button type="button" class="tab-btn" data-view="view-calendar">
+      <span class="tab-icon">📅</span><span class="tab-label">カレンダー</span>
+    </button>
+    <button type="button" class="tab-btn" data-view="view-search">
+      <span class="tab-icon">🔍</span><span class="tab-label">検索</span>
+    </button>
+    <button type="button" class="tab-btn" data-view="view-racket">
+  <span class="tab-icon">🎭</span><span class="tab-label">ラケット</span>
+</button>
+    <button type="button" class="tab-btn" data-view="view-settings">
+      <span class="tab-icon">⚙️</span><span class="tab-label">設定</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ============ 詳細モーダル ============ -->
+<div id="detail-modal" class="modal-overlay" hidden>
+  <div class="modal-card">
+    <button type="button" id="detail-close" class="modal-close" aria-label="閉じる">×</button>
+    <p id="detail-meta" class="detail-meta"></p>
+    <h3 id="detail-title" class="detail-title"></h3>
+    <div id="detail-tags" class="tag-badges"></div>
+    <p id="detail-body" class="detail-body"></p>
+    <div class="detail-actions">
+      <button type="button" id="detail-edit"   class="btn btn-secondary btn-half">✏️ 編集</button>
+      <button type="button" id="detail-delete" class="btn btn-danger    btn-half">🗑 削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 編集モーダル ============ -->
+<div id="edit-modal" class="modal-overlay" hidden>
+  <div class="modal-card modal-card-edit">
+    <button type="button" id="edit-close" class="modal-close" aria-label="閉じる">×</button>
+    <h3 class="modal-heading">✏️ 記録を編集</h3>
+    <form id="edit-form">
+      <input type="hidden" id="edit-id">
+
+      <div class="form-row form-row-range">
+        <div>
+          <label for="edit-date">日付 <span class="required">必須</span></label>
+          <input type="date" id="edit-date" class="date-input" required>
+        </div>
+        <div>
+          <label for="edit-time">時刻 <span class="required">必須</span></label>
+          <input type="time" id="edit-time" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label for="edit-title">タイトル <span class="required">必須</span></label>
+        <input type="text" id="edit-title" required maxlength="100">
+      </div>
+
+      <div class="form-row">
+        <label for="edit-body">本文 <span class="required">必須</span></label>
+        <textarea id="edit-body" rows="6" required></textarea>
+      </div>
+
+      <div class="form-row">
+        <label>気分</label>
+        <div class="mood-picker" id="edit-mood-picker">
+          <button type="button" class="mood-btn" data-mood="1" aria-label="とても悪い">😢</button>
+          <button type="button" class="mood-btn" data-mood="2" aria-label="悪い">😟</button>
+          <button type="button" class="mood-btn" data-mood="3" aria-label="ふつう">😐</button>
+          <button type="button" class="mood-btn" data-mood="4" aria-label="良い">🙂</button>
+          <button type="button" class="mood-btn" data-mood="5" aria-label="とても良い">😊</button>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>タグ</label>
+        <div class="tag-chips" id="edit-tag-chips">
+          <button type="button" class="tag-chip" data-tag="仕事">仕事</button>
+          <button type="button" class="tag-chip" data-tag="プライベート">プライベート</button>
+          <button type="button" class="tag-chip" data-tag="健康">健康</button>
+          <button type="button" class="tag-chip" data-tag="アイデア">アイデア</button>
+          <button type="button" class="tag-chip" data-tag="その他">その他</button>
+        </div>
+      </div>
+
+      <div class="edit-form-actions">
+        <button type="button" id="edit-cancel" class="btn btn-secondary btn-half">キャンセル</button>
+        <button type="submit"                  class="btn btn-primary   btn-half">💾 保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ============ トースト通知 ============ -->
+<div id="toast" class="toast" hidden></div>
+
+<script src="script.js"></script>
+</body>
+</html>
