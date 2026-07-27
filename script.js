@@ -932,8 +932,22 @@ async function handleImportFile(e) {
       return;
     }
 
+    // ①日記データを入れ替え
     await dbClearAll();
     await dbBulkAdd(json.entries);
+
+    // ②カスタムタグがあれば復元（★tryブロックの中に移動）
+    if (Array.isArray(json.customTags)) {
+      customTags = json.customTags;
+      saveCustomTags();
+      renderTagManageList();
+      renderAllTagChipContainers();
+    }
+
+    // ③思考記録があれば復元（★tryブロックの中に移動）
+    if (Array.isArray(json.thoughts)) {
+      await dbBulkAddThoughts(json.thoughts);
+    }
 
     showToast('復元が完了しました ✅');
     await refreshListView();
@@ -943,17 +957,8 @@ async function handleImportFile(e) {
   } catch (err) {
     showError('インポートに失敗しました。ファイル形式を確認してください', err);
   }
-  if (Array.isArray(json.customTags)) {
-  customTags = json.customTags;
-  saveCustomTags();
-  renderTagManageList();
-  renderAllTagChipContainers();
-}
-if (Array.isArray(json.thoughts)) {
-  await dbBulkAddThoughts(json.thoughts);
 }
 
-}
 
 /* ---------------------------------------------------------
  * 12. 初期化
@@ -1373,10 +1378,10 @@ const SORTABLE_TABS = [
   { id: 'view-list',     icon: '📋', label: '一覧' },
   { id: 'view-calendar', icon: '📅', label: 'カレンダー' },
   { id: 'view-search',   icon: '🔍', label: '検索' },
-  { id: 'view-racket',   icon: '🎭', label: 'ラケット' }
-  { id: 'view-thought', icon: '🧠', label: '思考記録' }
-
+  { id: 'view-racket',   icon: '🎭', label: 'ラケット' },
+  { id: 'view-thought',  icon: '🧠', label: '思考記録' }
 ];
+
 
 let currentTabOrder = [];
 
