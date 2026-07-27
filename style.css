@@ -873,3 +873,106 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .btn-bio {
   font-size: 0.95rem;
 }
+/* ===== 思考記録タブ：一覧 ===== */
+.thought-back-btn { margin-bottom: 1rem; }
+.thought-entry-list {
+  list-style: none; padding: 0; margin: 0.75rem 0 0 0;
+  display: flex; flex-direction: column; gap: 0.7rem;
+}
+.thought-entry-item {
+  border-left: 4px solid #2980b9;
+  background: rgba(41, 128, 185, 0.06);
+  border-radius: 10px; padding: 0.7rem 0.9rem; cursor: pointer;
+}
+.thought-entry-head {
+  display: flex; align-items: center; gap: 0.5rem;
+  flex-wrap: wrap; margin-bottom: 0.4rem;
+}
+.thought-badge {
+  background: #2980b9; color: #fff; font-size: 0.7rem;
+  padding: 0.15rem 0.5rem; border-radius: 10px; white-space: nowrap;
+}
+.thought-entry-scores {
+  display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem;
+  font-size: 0.8rem; color: var(--color-text-muted, #666); margin-bottom: 0.3rem;
+}
+.thought-entry-preview {
+  font-size: 0.85rem; color: var(--color-text-muted, #666);
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.thought-entry-actions { text-align: right; margin-top: 0.5rem; }
+.btn-thought-delete {
+  background: none; border: 1px solid #d33; color: #d33;
+  border-radius: 12px; padding: 0.25rem 0.7rem; font-size: 0.78rem; cursor: pointer;
+}
+
+/* ===== 折りたたみガイド ===== */
+.thought-guide {
+  background: rgba(74, 124, 111, 0.08);
+  border: 1px solid rgba(74, 124, 111, 0.3);
+  border-radius: 10px; margin-bottom: 1.5rem; overflow: hidden;
+}
+.thought-guide summary {
+  padding: 0.8rem 1rem; font-weight: bold; color: #4a7c6f;
+  cursor: pointer; list-style: none; position: relative;
+}
+.thought-guide summary::-webkit-details-marker { display: none; }
+.thought-guide summary::after {
+  content: '▼'; position: absolute; right: 1rem; transition: transform 0.2s;
+}
+.thought-guide[open] summary::after { transform: rotate(180deg); }
+.thought-guide-content {
+  padding: 0 1rem 1rem 1rem; font-size: 0.85rem; line-height: 1.7;
+  color: var(--color-text-muted, #555);
+}
+.thought-guide-content p { margin: 0 0 0.7rem 0; }
+
+/* ===== 日付の年月日表示 ===== */
+.thought-date-display {
+  margin: 0.4rem 0 0 0; font-size: 0.95rem;
+  color: var(--color-text-muted, #666);
+}
+
+/* ===== スコアボタン(1〜10) ===== */
+.thought-score-row { margin-bottom: 1.1rem; }
+.thought-sublabel {
+  font-size: 0.85rem; color: var(--color-text-muted, #666);
+  display: block; margin: 0.4rem 0 0.2rem 0;
+}
+.thought-score-selector { margin-top: 0.3rem; margin-bottom: 0.5rem; }
+.thought-score-label {
+  display: inline-block; font-size: 1.05rem; font-weight: 700;
+  color: #2980b9; margin-bottom: 0.35rem; min-width: 4rem;
+}
+.thought-score-btns { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.thought-score-btns button {
+  width: 38px; height: 38px; border: 1px solid #ccc; background: #f5f5f5;
+  border-radius: 8px; font-size: 0.85rem; cursor: pointer;
+}
+.thought-score-btns button.selected {
+  background: #2980b9; color: #fff; border-color: #2980b9;
+}
+
+/* ===== 気分スライダー ===== */
+#thought-mood { width: 100%; margin-top: 0.5rem; }
+.thought-mood-value {
+  text-align: center; font-size: 1.3rem; font-weight: 700;
+  margin-top: 0.3rem; color: #888;
+}
+.thought-mood-value.positive { color: #2980b9; }
+.thought-mood-value.negative { color: #c0392b; }
+
+.thought-form-actions {
+  display: flex; gap: 0.75rem; margin-top: 1.25rem;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .thought-entry-item { background: rgba(41, 128, 185, 0.18); }
+  .thought-entry-scores, .thought-entry-preview, .thought-date-display { color: #ccc; }
+  .thought-guide { background: rgba(159, 214, 196, 0.1); border-color: rgba(159, 214, 196, 0.25); }
+  .thought-guide summary { color: #9fd6c4; }
+  .thought-guide-content { color: #ccc; }
+  .thought-score-btns button { background: #2a2a2a; border-color: #555; color: #eee; }
+}
