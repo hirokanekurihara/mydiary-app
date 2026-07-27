@@ -43,8 +43,10 @@ function escapeHtml(str) {
  * 1. IndexedDB ラッパー
  * --------------------------------------------------------- */
 const DB_NAME = 'DiaryDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;               // ★ 1 → 2 に変更
 const STORE_NAME = 'entries';
+const THOUGHT_STORE = 'thoughts';   // ★ 追加
+
 
 let dbInstance = null;
 
@@ -60,7 +62,11 @@ function openDB() {
         store.createIndex('by_date', 'date', { unique: false });
         store.createIndex('by_date_seq', ['date', 'seq'], { unique: true });
       }
-    };
+      // ★思考記録用ストア：dateを主キーにすることで「一日一件」を自動保証する
+if (!db.objectStoreNames.contains(THOUGHT_STORE)) {
+  db.createObjectStore(THOUGHT_STORE, { keyPath: 'date' });
+}
+};
 
     req.onsuccess = (event) => {
       dbInstance = event.target.result;
@@ -398,6 +404,11 @@ function switchView(viewId) {
     document.getElementById('racket-list-view').hidden = false;
     refreshRacketList();
   }
+  if (viewId === 'view-thought') {
+  showThoughtListView();
+  refreshThoughtList();
+}
+
 }
 
 
@@ -854,12 +865,15 @@ async function doBackup() {
   try {
     const entries = await dbGetAllEntries();
     const nowIso = new Date().toISOString();
-    const payload = {
+    const thoughts = await dbGetAllThoughts();  // ★ 追加
+const payload = {
   version: 1,
   exportedAt: nowIso,
   entries,
-  customTags // ★追加：タグ設定も一緒にバックアップする
+  customTags,
+  thoughts   // ★ 追加
 };
+
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -935,6 +949,9 @@ async function handleImportFile(e) {
   renderTagManageList();
   renderAllTagChipContainers();
 }
+if (Array.isArray(json.thoughts)) {
+  await dbBulkAddThoughts(json.thoughts);
+}
 
 }
 
@@ -960,6 +977,8 @@ function initAppOnce() {
   initSearchView();
   initSettingsView();
   initRacketTab();
+  initThoughtTab();   // ★ 追加
+
 
   bindRacketMigrateButtons(document.getElementById('entry-list'));
   bindRacketMigrateButtons(document.getElementById('search-result-list'));
@@ -1355,6 +1374,8 @@ const SORTABLE_TABS = [
   { id: 'view-calendar', icon: '📅', label: 'カレンダー' },
   { id: 'view-search',   icon: '🔍', label: '検索' },
   { id: 'view-racket',   icon: '🎭', label: 'ラケット' }
+  { id: 'view-thought', icon: '🧠', label: '思考記録' }
+
 ];
 
 let currentTabOrder = [];
@@ -1602,5 +1623,228 @@ function initBiometricSettings() {
     localStorage.removeItem(BIO_CRED_ID_KEY);
     showToast('生体認証の登録を解除しました');
     updateBioSettingsUI();
+  });
+}
+/* ---------------------------------------------------------
+ * 18. 思考記録タブ
+ * --------------------------------------------------------- */
+
+async function dbGetAllThoughts() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(THOUGHT_STORE, 'readonly').objectStore(THOUGHT_STORE).getAll();
+    req.onsuccess = () => resolve((req.result || []).sort((a, b) => (a.date < b.date ? 1 : -1)));
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbGetThoughtByDate(dateStr) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(THOUGHT_STORE, 'readonly').objectStore(THOUGHT_STORE).get(dateStr);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbSaveThought(thought) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(THOUGHT_STORE, 'readwrite').objectStore(THOUGHT_STORE).put(thought);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDeleteThought(dateStr) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(THOUGHT_STORE, 'readwrite').objectStore(THOUGHT_STORE).delete(dateStr);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbBulkAddThoughts(thoughts) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(THOUGHT_STORE, 'readwrite');
+    thoughts.forEach((t) => tx.objectStore(THOUGHT_STORE).put(t));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+const THOUGHT_SCORE_FIELDS = ['pac', 'parallelFamily', 'parallelOther', 'objectivity', 'selfAffirm', 'otherAffirm', 'emotion'];
+let thoughtScores = {};
+
+function resetThoughtScores() {
+  thoughtScores = {};
+  THOUGHT_SCORE_FIELDS.forEach((f) => (thoughtScores[f] = null));
+  document.querySelectorAll('.thought-score-selector').forEach((sel) => renderThoughtScore(sel));
+  document.getElementById('thought-mood').value = 0;
+  updateMoodDisplay(0);
+}
+function renderThoughtScore(selector) {
+  const field = selector.dataset.field;
+  const val = thoughtScores[field];
+  const label = document.getElementById(`${field}-label`);
+  if (label) label.textContent = val == null ? '未選択' : String(val);
+  selector.querySelectorAll('button').forEach((b) => b.classList.toggle('selected', Number(b.dataset.val) === val));
+}
+function updateMoodDisplay(val) {
+  const el = document.getElementById('thought-mood-value');
+  el.textContent = val > 0 ? `+${val}` : String(val);
+  el.classList.toggle('positive', val > 0);
+  el.classList.toggle('negative', val < 0);
+}
+function formatDateJp(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  return `${y}年${Number(m)}月${Number(d)}日`;
+}
+function updateThoughtDateDisplay() {
+  const val = document.getElementById('thought-date').value;
+  document.getElementById('thought-date-display').textContent = formatDateJp(val);
+}
+
+function initThoughtScoreSelectors() {
+  document.querySelectorAll('.thought-score-selector').forEach((selector) => {
+    const field = selector.dataset.field;
+    selector.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const val = Number(btn.dataset.val);
+        thoughtScores[field] = (thoughtScores[field] === val) ? null : val;
+        renderThoughtScore(selector);
+      });
+    });
+  });
+  document.getElementById('thought-mood').addEventListener('input', (e) => updateMoodDisplay(Number(e.target.value)));
+  document.getElementById('thought-date').addEventListener('change', updateThoughtDateDisplay);
+}
+
+function showThoughtListView() {
+  document.getElementById('thought-list-view').hidden = false;
+  document.getElementById('thought-form-view').hidden = true;
+}
+function showThoughtFormView() {
+  document.getElementById('thought-list-view').hidden = true;
+  document.getElementById('thought-form-view').hidden = false;
+}
+
+async function openThoughtForm(record) {
+  resetThoughtScores();
+  const date = record ? record.date : todayStr();
+
+  document.getElementById('thought-edit-date').value = date; // ★元の日付を記憶
+  document.getElementById('thought-date').value = date;
+  updateThoughtDateDisplay();
+  document.getElementById('thought-event').value = record ? (record.event || '') : '';
+
+  if (record) {
+    THOUGHT_SCORE_FIELDS.forEach((f) => (thoughtScores[f] = record[f] ?? null));
+    document.getElementById('thought-mood').value = record.mood ?? 0;
+    updateMoodDisplay(record.mood ?? 0);
+    document.querySelectorAll('.thought-score-selector').forEach((sel) => renderThoughtScore(sel));
+  } else {
+    const existing = await dbGetThoughtByDate(date);
+    if (existing) {
+      showToast('今日の記録が既にあります。編集モードで開きます');
+      return openThoughtForm(existing);
+    }
+  }
+  showThoughtFormView();
+}
+
+async function refreshThoughtList() {
+  const listEl = document.getElementById('thought-list');
+  const emptyEl = document.getElementById('thought-list-empty');
+  try {
+    const rows = await dbGetAllThoughts();
+    listEl.innerHTML = '';
+    rows.forEach((row) => {
+      const preview = (row.event || '').replace(/\n/g, ' ');
+      const scoreText = [
+        row.pac != null ? `PAC:${row.pac}` : '',
+        row.objectivity != null ? `A:${row.objectivity}` : '',
+        row.selfAffirm != null ? `自己:${row.selfAffirm}` : '',
+        row.otherAffirm != null ? `他者:${row.otherAffirm}` : '',
+        row.mood != null ? `気分:${row.mood > 0 ? '+' : ''}${row.mood}` : ''
+      ].filter(Boolean).join('　');
+      const li = document.createElement('li');
+      li.className = 'thought-entry-item';
+      li.innerHTML = `
+        <div class="thought-entry-head">
+          <span class="thought-badge">🧠 思考記録</span>
+          <span class="entry-date-label">${escapeHtml(formatDateJp(row.date))}</span>
+        </div>
+        <div class="thought-entry-scores">${escapeHtml(scoreText)}</div>
+        <div class="thought-entry-preview">${escapeHtml(preview)}</div>
+        <div class="thought-entry-actions">
+          <button type="button" class="btn-thought-delete" data-date="${row.date}">🗑 削除</button>
+        </div>`;
+      li.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-thought-delete')) return;
+        openThoughtForm(row);
+      });
+      listEl.appendChild(li);
+    });
+    emptyEl.hidden = rows.length > 0;
+  } catch (err) {
+    showError('思考記録一覧の取得に失敗しました', err);
+  }
+}
+
+function initThoughtTab() {
+  initThoughtScoreSelectors();
+
+  document.getElementById('btn-new-thought').addEventListener('click', () => openThoughtForm(null));
+  document.getElementById('thought-back-btn').addEventListener('click', () => { showThoughtListView(); refreshThoughtList(); });
+  document.getElementById('thought-cancel').addEventListener('click', () => { showThoughtListView(); refreshThoughtList(); });
+
+  document.getElementById('thought-list').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-thought-delete');
+    if (!btn) return;
+    e.stopPropagation();
+    if (!confirm('この思考記録を削除します。よろしいですか？')) return;
+    try {
+      await dbDeleteThought(btn.dataset.date);
+      showToast('削除しました');
+      refreshThoughtList();
+    } catch (err) { showError('削除に失敗しました', err); }
+  });
+
+  document.getElementById('thought-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newDate = document.getElementById('thought-date').value;
+    const originalDate = document.getElementById('thought-edit-date').value;
+    const eventText = document.getElementById('thought-event').value.trim();
+
+    if (!newDate) { showToast('日付を入力してください'); return; }
+    if (!eventText) { showToast('⑨ 出来事を入力してください'); return; }
+
+    // ★日付を変更した場合、移動先に既存レコードがあれば確認し、元のレコードは必ず削除する
+    if (originalDate && originalDate !== newDate) {
+      const conflict = await dbGetThoughtByDate(newDate);
+      if (conflict && !confirm(`${formatDateJp(newDate)}の記録が既にあります。上書きしますか？`)) return;
+      await dbDeleteThought(originalDate);
+    }
+
+    const thought = {
+      date: newDate,
+      pac: thoughtScores.pac,
+      parallelFamily: thoughtScores.parallelFamily,
+      parallelOther: thoughtScores.parallelOther,
+      objectivity: thoughtScores.objectivity,
+      selfAffirm: thoughtScores.selfAffirm,
+      otherAffirm: thoughtScores.otherAffirm,
+      emotion: thoughtScores.emotion,
+      mood: Number(document.getElementById('thought-mood').value),
+      event: eventText,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await dbSaveThought(thought);
+      showToast('思考記録を保存しました 🧠');
+      showThoughtListView();
+      refreshThoughtList();
+    } catch (err) { showError('保存に失敗しました', err); }
   });
 }
