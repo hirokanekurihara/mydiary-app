@@ -6,7 +6,7 @@
 <title>日記アプリ</title>
 <link rel="apple-touch-icon" href="dinary icon.png">
 <meta name="theme-color" content="#4a7c6f">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=3">
 <!-- jsPDF (PDF出力用) -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 </head>
@@ -442,12 +442,11 @@
   <button type="button" id="btn-remove-bio" class="btn btn-danger btn-block" hidden>生体認証の登録を解除</button>
 </div>
 
-
+<div class="settings-card"></div>
  <h3>PIN変更</h3>
         <p class="settings-info">現在のPINを解除して、次回起動時に新しいPINを設定できるようにします。</p>
         <button type="button" id="btn-reset-pin" class="btn btn-danger btn-block">🔑 PINをリセット</button>
       </div>
-      <div class="settings-card">
 
     </section>
 
@@ -556,6 +555,6 @@
 <!-- ============ トースト通知 ============ -->
 <div id="toast" class="toast" hidden></div>
 
-<script src="script.js"></script>
+<script src="script.js?v=3"></script>
 </body>
 </html>
