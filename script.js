@@ -1192,7 +1192,6 @@ function initAppOnce() {
   safeInit('initTagManagement', initTagManagement);
   safeInit('initTabOrderSettings', initTabOrderSettings);
   safeInit('initBiometricSettings', initBiometricSettings);
-  safeInit('initOcrHelper', initOcrHelper);
 
   safeInit('initTabs', initTabs);
   safeInit('initWriteForm', initWriteForm);
@@ -2127,6 +2126,7 @@ function initOcrHelper() {
     }
   });
 }
+
 /* ---------------------------------------------------------
  * 20. 検索結果のPDF出力
  * --------------------------------------------------------- */
