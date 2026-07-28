@@ -397,7 +397,15 @@
     placeholder="出来事、その時の心情、Aを意識した客観視、自分を褒める言葉を書きましょう。"></textarea>
 </div>
 
+      <!-- ★ここが欠落していた部分：保存・キャンセルボタンとフォームの閉じタグ -->
+      <div class="thought-form-actions">
+        <button type="button" id="thought-cancel" class="btn btn-secondary btn-half">キャンセル</button>
+        <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
+      </div>
+    </form>
+  </div>
 </section>
+
 
 
     <!-- ---- 設定タブ ---- -->
@@ -442,11 +450,11 @@
   <button type="button" id="btn-remove-bio" class="btn btn-danger btn-block" hidden>生体認証の登録を解除</button>
 </div>
 
-<div class="settings-card"></div>
- <h3>PIN変更</h3>
-        <p class="settings-info">現在のPINを解除して、次回起動時に新しいPINを設定できるようにします。</p>
-        <button type="button" id="btn-reset-pin" class="btn btn-danger btn-block">🔑 PINをリセット</button>
-      </div>
+<div class="settings-card">
+  <h3>🔑 PIN変更</h3>
+  <p class="settings-info">現在のPINを解除して、次回起動時に新しいPINを設定できるようにします。</p>
+  <button type="button" id="btn-reset-pin" class="btn btn-danger btn-block">🔑 PINをリセット</button>
+</div>
 
     </section>
 
