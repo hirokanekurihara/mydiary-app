@@ -1182,32 +1182,38 @@ function initAppOnce() {
   if (appState.appInitialized) return;
   appState.appInitialized = true;
 
-  loadCustomTags();
-  renderAllTagChipContainers();
-  initTagManagement();
-  initTabOrderSettings();
-  initBiometricSettings();   // ★この1行を追加
-  initOcrHelper();   // ★この1行を追加
+  // ★1つの関数が失敗しても、後続の処理を止めないようにするヘルパー
+  const safeInit = (name, fn) => {
+    try { fn(); } catch (err) { console.error(`[初期化エラー：${name}]`, err); }
+  };
 
+  safeInit('loadCustomTags', loadCustomTags);
+  safeInit('renderAllTagChipContainers', renderAllTagChipContainers);
+  safeInit('initTagManagement', initTagManagement);
+  safeInit('initTabOrderSettings', initTabOrderSettings);
+  safeInit('initBiometricSettings', initBiometricSettings);
+  safeInit('initOcrHelper', initOcrHelper);
 
-  initTabs();
-  initWriteForm();
-  initListView();
-  initDetailModal();
-  initEditModal();
-  initCalendarView();
-  initSearchView();
-  initSettingsView();
-  initRacketTab();
-  initThoughtTab();   // ★ 追加
+  safeInit('initTabs', initTabs);
+  safeInit('initWriteForm', initWriteForm);
+  safeInit('initListView', initListView);
+  safeInit('initDetailModal', initDetailModal);
+  safeInit('initEditModal', initEditModal);
+  safeInit('initCalendarView', initCalendarView);
+  safeInit('initSearchView', initSearchView);
+  safeInit('initSettingsView', initSettingsView);
+  safeInit('initRacketTab', initRacketTab);
+  safeInit('initThoughtTab', initThoughtTab);
 
+  safeInit('bindRacketMigrateButtons(entry-list)', () =>
+    bindRacketMigrateButtons(document.getElementById('entry-list')));
+  safeInit('bindRacketMigrateButtons(search-result-list)', () =>
+    bindRacketMigrateButtons(document.getElementById('search-result-list')));
 
-  bindRacketMigrateButtons(document.getElementById('entry-list'));
-  bindRacketMigrateButtons(document.getElementById('search-result-list'));
-
-  refreshListView();
-  refreshCalendarView();
+  safeInit('refreshListView', refreshListView);
+  safeInit('refreshCalendarView', refreshCalendarView);
 }
+
 
 
 
