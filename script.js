@@ -709,25 +709,28 @@ function initSearchView() {
 
   document.getElementById('btn-search').addEventListener('click', runSearch);
 
-  // 検索対象の切り替え（通常ボタン方式）
-  document.querySelectorAll('.target-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.target-btn').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      const target = btn.dataset.target;
+  // ★イベント委譲方式：親要素に1つだけリスナーを付けることで、より確実に動作させる
+  const targetContainer = document.querySelector('.search-target-selector');
+  targetContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('.target-btn');
+    if (!btn) return; // ボタン以外がクリックされた場合は何もしない
 
-      document.getElementById('search-tags-row').hidden = (target !== 'diary');
+    document.querySelectorAll('.target-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const target = btn.dataset.target;
+    appState.lastSearchTarget = target;
 
-      const kw = document.getElementById('search-keyword');
-      if (target === 'diary')   kw.placeholder = 'タイトル・本文から検索';
-      if (target === 'thought') kw.placeholder = '出来事から検索';
-      if (target === 'racket')  kw.placeholder = '出来事・考え・感情から検索';
+    document.getElementById('search-tags-row').hidden = (target !== 'diary');
 
-      document.getElementById('search-result-list').innerHTML = '';
-      document.getElementById('search-result-empty').hidden = true;
-      document.getElementById('search-thought-averages').hidden = true;
-      document.getElementById('btn-search-pdf').hidden = true;
-    });
+    const kw = document.getElementById('search-keyword');
+    if (target === 'diary')   kw.placeholder = 'タイトル・本文から検索';
+    if (target === 'thought') kw.placeholder = '出来事から検索';
+    if (target === 'racket')  kw.placeholder = '出来事・考え・感情から検索';
+
+    document.getElementById('search-result-list').innerHTML = '';
+    document.getElementById('search-result-empty').hidden = true;
+    document.getElementById('search-thought-averages').hidden = true;
+    document.getElementById('btn-search-pdf').hidden = true;
   });
 
   document.getElementById('btn-search-pdf').addEventListener('click', () => {
@@ -741,44 +744,45 @@ function initSearchView() {
 }
 
 
+
 /** 思考記録の平均スコアを計算し、パネルに描画する */
 function renderThoughtAverages(rows) {
   const fields = [
-    { key: 'pac',            label: '②PAC' },
-    { key: 'parallelFamily', label: '③平行(家族)' },
-    { key: 'parallelOther',  label: '③平行(他者)' },
-    { key: 'objectivity',    label: '④客観性(A)' },
-    { key: 'selfAffirm',     label: '⑤自己肯定' },
-    { key: 'otherAffirm',    label: '⑥他者肯定' },
-    { key: 'emotion',        label: '⑦感情(FC)' },
-    { key: 'mood',           label: '⑧気分点数' }
+    { key: 'pac',            label: '② PAC（自他肯定の構え）' },
+    { key: 'parallelFamily', label: '③ 平行交流：家族（配偶者）' },
+    { key: 'parallelOther',  label: '③ 平行交流：他者' },
+    { key: 'objectivity',    label: '④ 客観性（A）' },
+    { key: 'selfAffirm',     label: '⑤ 自己肯定' },
+    { key: 'otherAffirm',    label: '⑥ 他者肯定' },
+    { key: 'emotion',        label: '⑦ 感情表現（FC）' },
+    { key: 'mood',           label: '⑧ 気分点数（ー100〜＋100）' }
   ];
 
   const gridEl = document.getElementById('averages-grid');
   gridEl.innerHTML = '';
 
   fields.forEach(({ key, label }) => {
-    // nullや未選択(undefined)を除外し、実際に入力された値だけを対象にする
     const validValues = rows.map((r) => r[key]).filter((v) => v != null);
-
     let displayVal = '−';
     let moodClass = '';
     if (validValues.length > 0) {
       const avg = validValues.reduce((sum, v) => sum + Number(v), 0) / validValues.length;
-      displayVal = (key === 'mood' && avg > 0) ? `+${avg.toFixed(1)}` : avg.toFixed(1);
       if (key === 'mood') {
+        displayVal = avg > 0 ? `+${avg.toFixed(1)}` : avg.toFixed(1);
         moodClass = avg > 0 ? 'mood-positive' : avg < 0 ? 'mood-negative' : 'mood-neutral';
+      } else {
+        displayVal = `${avg.toFixed(1)} / 10`;
       }
     }
-
     const item = document.createElement('div');
     item.className = 'avg-item';
-    item.innerHTML = `<span>${escapeHtml(label)}</span><strong class="${moodClass}">${escapeHtml(displayVal)}</strong>`;
+    item.innerHTML = `<span class="avg-item-label">${escapeHtml(label)}</span><span class="avg-item-value ${moodClass}">${escapeHtml(displayVal)}</span>`;
     gridEl.appendChild(item);
   });
 
   document.getElementById('avg-count').textContent = String(rows.length);
 }
+
 
 /** 思考記録の検索結果を一覧カードとして描画する */
 function renderSearchThoughtCards(listEl, rows) {
