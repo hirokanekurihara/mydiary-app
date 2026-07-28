@@ -976,3 +976,124 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   .thought-guide-content { color: #ccc; }
   .thought-score-btns button { background: #2a2a2a; border-color: #555; color: #eee; }
 }
+/* ===== 検索対象の切り替えUI ===== */
+.search-target-selector {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.2rem;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.3rem;
+  border-radius: 10px;
+}
+.target-option {
+  flex: 1;
+  text-align: center;
+  font-size: 0.82rem;
+  padding: 0.55rem 0.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text-muted, #666);
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.target-option.active {
+  background: #fff;
+  color: #4a7c6f;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+.target-option input { display: none; }
+
+/* ===== 思考記録の平均点パネル ===== */
+.thought-averages-card {
+  background: rgba(41, 128, 185, 0.07);
+  border: 1px solid rgba(41, 128, 185, 0.22);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.4rem;
+}
+.thought-averages-card h3 {
+  margin: 0 0 0.8rem 0;
+  font-size: 0.92rem;
+  color: #2980b9;
+  text-align: center;
+}
+.averages-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+.avg-item {
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.5rem 0.2rem;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.avg-item span {
+  display: block;
+  font-size: 0.65rem;
+  color: #666;
+  margin-bottom: 0.2rem;
+  white-space: nowrap;
+}
+.avg-item strong {
+  display: block;
+  font-size: 1.1rem;
+  color: #2980b9;
+}
+.avg-item strong.mood-positive { color: #2980b9; }
+.avg-item strong.mood-negative { color: #c0392b; }
+.avg-item strong.mood-neutral  { color: #888; }
+.averages-note {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #888);
+  text-align: center;
+  margin: 0.6rem 0 0 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .search-target-selector { background: rgba(255, 255, 255, 0.1); }
+  .target-option { color: #aaa; }
+  .target-option.active { background: #3a3a3a; color: #9fd6c4; }
+  .thought-averages-card { background: rgba(41, 128, 185, 0.16); border-color: rgba(41, 128, 185, 0.32); }
+  .thought-averages-card h3 { color: #6ab0de; }
+  .avg-item { background: #2a2a2a; }
+  .avg-item span { color: #aaa; }
+  .avg-item strong { color: #6ab0de; }
+  .averages-note { color: #999; }
+}
+/* ===== 「書く」フォームの時刻入力欄 ===== */
+.time-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 8px;
+  font-size: 1rem;
+  box-sizing: border-box;
+  background: inherit;
+  color: inherit;
+}
+@media (prefers-color-scheme: dark) {
+  .time-input {
+    background: #2a2a2a;
+    color: #f0f0f0;
+    border-color: #555;
+  }
+}
+.ocr-toolbar { display: flex; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+.btn-ocr {
+  flex: 1; min-width: 0; padding: 0.55rem 0.5rem;
+  border: 1px solid #4a7c6f; background: rgba(74, 124, 111, 0.1); color: #4a7c6f;
+  border-radius: 10px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.btn-ocr-close { flex: none; width: 100%; background: rgba(200,50,50,0.1); border-color: #c0392b; color: #c0392b; margin-top: 0.5rem; }
+.ocr-preview-area { background: #f9f9f9; border: 1px solid #ddd; border-radius: 10px; padding: 0.8rem; margin-bottom: 0.8rem; }
+.ocr-guide { font-size: 0.82rem; color: #555; line-height: 1.6; margin: 0 0 0.7rem 0; background: rgba(74,124,111,0.1); border-radius: 8px; padding: 0.6rem 0.8rem; }
+.ocr-preview-img { width: 100%; border-radius: 8px; display: block; }
+@media (prefers-color-scheme: dark) {
+  .btn-ocr { background: rgba(159,214,196,0.15); color: #9fd6c4; border-color: #9fd6c4; }
+  .btn-ocr-close { background: rgba(200,80,80,0.2); color: #e07070; border-color: #e07070; }
+  .ocr-preview-area { background: #1e1e1e; border-color: #444; }
+  .ocr-guide { background: rgba(159,214,196,0.1); color: #ccc; }
+}
