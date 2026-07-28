@@ -375,27 +375,22 @@
         <input type="range" id="thought-mood" min="-100" max="100" step="10" value="0">
         <div id="thought-mood-value" class="thought-mood-value">0</div>
       </div>
-
+      
       <!-- ⑨出来事 -->
       <div class="form-row">
-  <label for="thought-event">⑨ 出来事 <span class="required">必須</span></label>
+        <label for="thought-event">⑨ 出来事 <span class="required">必須</span></label>
+        <textarea id="thought-event" rows="8" required
+          placeholder="出来事、その時の心情、Aを意識した客観視、自分を褒める言葉を書きましょう。"></textarea>
+      </div>
 
-  <div class="ocr-toolbar">
-    <button type="button" id="btn-ocr-camera" class="btn-ocr">📷 カメラ・画像から取り込む</button>
-    <button type="button" id="btn-ocr-paste" class="btn-ocr">📋 クリップボードから貼り付け</button>
+      <div class="thought-form-actions">
+        <button type="button" id="thought-cancel" class="btn btn-secondary btn-half">キャンセル</button>
+        <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
+      </div>
+    </form>
   </div>
+</section>
 
-  <div id="ocr-preview-area" class="ocr-preview-area" hidden>
-    <p class="ocr-guide">📌 画像内の文字を長押しして選択・コピーし、上の「📋 クリップボードから貼り付け」を押してください。</p>
-    <img id="ocr-preview-img" class="ocr-preview-img" src="" alt="選択した画像">
-    <button type="button" id="btn-ocr-close" class="btn-ocr btn-ocr-close">✕ 画像を閉じる</button>
-  </div>
-
-  <input type="file" id="ocr-file-input" accept="image/*" capture="environment" hidden>
-
-  <textarea id="thought-event" rows="8" required
-    placeholder="出来事、その時の心情、Aを意識した客観視、自分を褒める言葉を書きましょう。"></textarea>
-</div>
 
       <!-- ★ここが欠落していた部分：保存・キャンセルボタンとフォームの閉じタグ -->
       <div class="thought-form-actions">
