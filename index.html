@@ -140,17 +140,12 @@
   <h2 class="view-title">🔍 検索</h2>
 
   <!-- 検索対象の切り替え -->
-  <div class="search-target-selector">
-    <label class="target-option active" data-target="diary">
-      <input type="radio" name="search-target" value="diary" checked>📔 日記
-    </label>
-    <label class="target-option" data-target="thought">
-      <input type="radio" name="search-target" value="thought">🧠 思考記録
-    </label>
-    <label class="target-option" data-target="racket">
-      <input type="radio" name="search-target" value="racket">🎭 ラケット感情
-    </label>
-  </div>
+<div class="search-target-selector">
+  <button type="button" class="target-btn active" data-target="diary">📔 日記</button>
+  <button type="button" class="target-btn" data-target="thought">🧠 思考記録</button>
+  <button type="button" class="target-btn" data-target="racket">🎭 ラケット感情</button>
+</div>
+
 
   <div class="search-form">
     <div class="form-row">
@@ -189,6 +184,10 @@
 
   <ul id="search-result-list" class="entry-list"></ul>
   <p id="search-result-empty" class="empty-msg" hidden>該当する記録がありません。</p>
+  <button type="button" id="btn-search-pdf" class="btn btn-secondary btn-block" hidden>
+  📄 検索結果をPDF出力（日付順）
+</button>
+
 </section>
 
 
