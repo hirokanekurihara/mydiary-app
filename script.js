@@ -397,6 +397,15 @@ function switchView(viewId) {
   document.getElementById(viewId).classList.add('active-view');
   document.querySelector(`.tab-btn[data-view="${viewId}"]`).classList.add('active');
 
+  if (viewId === 'view-write') {
+    // タイトル・本文がまだ空の場合のみ、現在時刻に更新する
+    // （過去日付に変更して書きかけの内容がある場合は、上書きしないようにする）
+    const titleEmpty = document.getElementById('entry-title').value.trim() === '';
+    const bodyEmpty  = document.getElementById('entry-body').value.trim() === '';
+    if (titleEmpty && bodyEmpty) {
+      setEntryFormDateTime();
+    }
+  }
   if (viewId === 'view-list') refreshListView();
   if (viewId === 'view-calendar') refreshCalendarView();
   if (viewId === 'view-racket') {
@@ -405,26 +414,43 @@ function switchView(viewId) {
     refreshRacketList();
   }
   if (viewId === 'view-thought') {
-  showThoughtListView();
-  refreshThoughtList();
+    showThoughtListView();
+    refreshThoughtList();
+  }
 }
 
-}
 
 
 /* ---------------------------------------------------------
  * 5. 「書く」フォーム
  * --------------------------------------------------------- */
+/** 「書く」フォームの日時欄に現在の日時をセットし、年月日表示も更新する */
+function setEntryFormDateTime() {
+  const now = new Date();
+  document.getElementById('entry-date').value = formatDate(now);
+  document.getElementById('entry-time').value = formatTime(now);
+  updateEntryDateDisplay();
+}
+
+/** 日付入力欄の下に、日本語の年月日表示を更新する（formatDateJpは思考記録タブで定義済みの関数を再利用） */
+function updateEntryDateDisplay() {
+  const val = document.getElementById('entry-date').value;
+  document.getElementById('entry-date-display').textContent = formatDateJp(val);
+}
+
+
 function initWriteForm() {
+  // フォーム初期化時に現在の日時をデフォルトでセットする
+  setEntryFormDateTime();
+
+  // 日付を変更したら、下の年月日表示もリアルタイムで更新する
+  document.getElementById('entry-date').addEventListener('change', updateEntryDateDisplay);
+
   document.getElementById('mood-picker').addEventListener('click', (e) => {
     const btn = e.target.closest('.mood-btn');
     if (!btn) return;
     const mood = parseInt(btn.dataset.mood, 10);
-    if (appState.selectedMood === mood) {
-      appState.selectedMood = null;
-    } else {
-      appState.selectedMood = mood;
-    }
+    appState.selectedMood = (appState.selectedMood === mood) ? null : mood;
     renderMoodPicker();
   });
 
@@ -443,6 +469,7 @@ function initWriteForm() {
   });
 }
 
+
 function renderMoodPicker() {
   document.querySelectorAll('#mood-picker .mood-btn').forEach((btn) => {
     const mood = parseInt(btn.dataset.mood, 10);
@@ -457,32 +484,29 @@ function renderTagChips(containerId, selectedSet) {
 }
 
 async function handleSaveEntry() {
+  const dateEl  = document.getElementById('entry-date');
+  const timeEl  = document.getElementById('entry-time');
   const titleEl = document.getElementById('entry-title');
-  const bodyEl = document.getElementById('entry-body');
-  const title = titleEl.value.trim();
-  const body = bodyEl.value.trim();
+  const bodyEl  = document.getElementById('entry-body');
 
-  if (!title || !body) {
-    showToast('タイトルと本文を入力してください');
-    return;
-  }
+  const date  = dateEl.value;
+  const time  = timeEl.value;
+  const title = titleEl.value.trim();
+  const body  = bodyEl.value.trim();
+
+  if (!date || !time) { showToast('日付と時刻を入力してください'); return; }
+  if (!title || !body) { showToast('タイトルと本文を入力してください'); return; }
 
   try {
-    const now = new Date();
-    const date = formatDate(now);
-    const time = formatTime(now);
+    // 入力された日付を基準に、その日の最大通し番号を取得して+1する
     const maxSeq = await dbGetMaxSeqForDate(date);
     const seq = maxSeq + 1;
 
     const entry = {
-      date,
-      time,
-      seq,
-      title,
-      body,
+      date, time, seq, title, body,
       mood: appState.selectedMood,
       tags: Array.from(appState.selectedTagsInput),
-      createdAt: now.toISOString()
+      createdAt: new Date().toISOString()
     };
 
     await dbAddEntry(entry);
@@ -495,15 +519,18 @@ async function handleSaveEntry() {
     renderMoodPicker();
     renderTagChips('tag-chips-input', appState.selectedTagsInput);
 
+    // 保存後は日時欄を「今」にリセットする（次の新規入力に備える）
+    setEntryFormDateTime();
+
     showToast('保存しました ✅');
 
-    // 一覧が今日を表示していれば更新
     document.getElementById('list-date-picker').value = date;
     appState.calSelectedDate = date;
   } catch (err) {
     showError('保存に失敗しました', err);
   }
 }
+
 
 /* ---------------------------------------------------------
  * 6. 一覧表示
@@ -665,7 +692,7 @@ async function refreshCalendarView() {
 }
 
 /* ---------------------------------------------------------
- * 9. 検索
+ * 9. 検索（日記／思考記録／ラケット感情の統合）
  * --------------------------------------------------------- */
 function initSearchView() {
   document.getElementById('tag-chips-search').addEventListener('click', (e) => {
@@ -678,45 +705,205 @@ function initSearchView() {
   });
 
   document.getElementById('btn-search').addEventListener('click', runSearch);
+
+  // 検索対象の切り替え（ラジオボタン）
+  document.querySelectorAll('input[name="search-target"]').forEach((radio) => {
+    radio.addEventListener('change', (e) => {
+      const target = e.target.value;
+
+      // 見た目（アクティブ表示）を切り替える
+      document.querySelectorAll('.target-option').forEach((label) => {
+        label.classList.toggle('active', label.dataset.target === target);
+      });
+
+      // タグ欄は日記のときだけ表示する
+      document.getElementById('search-tags-row').hidden = (target !== 'diary');
+
+      // キーワード欄のプレースホルダーを対象に応じて変える
+      const kw = document.getElementById('search-keyword');
+      if (target === 'diary')   kw.placeholder = 'タイトル・本文から検索';
+      if (target === 'thought') kw.placeholder = '出来事から検索';
+      if (target === 'racket')  kw.placeholder = '出来事・考え・感情から検索';
+
+      // 対象を切り替えたら、古い検索結果は一旦クリアする
+      document.getElementById('search-result-list').innerHTML = '';
+      document.getElementById('search-result-empty').hidden = true;
+      document.getElementById('search-thought-averages').hidden = true;
+    });
+  });
+}
+
+/** 思考記録の平均スコアを計算し、パネルに描画する */
+function renderThoughtAverages(rows) {
+  const fields = [
+    { key: 'pac',            label: '②PAC' },
+    { key: 'parallelFamily', label: '③平行(家族)' },
+    { key: 'parallelOther',  label: '③平行(他者)' },
+    { key: 'objectivity',    label: '④客観性(A)' },
+    { key: 'selfAffirm',     label: '⑤自己肯定' },
+    { key: 'otherAffirm',    label: '⑥他者肯定' },
+    { key: 'emotion',        label: '⑦感情(FC)' },
+    { key: 'mood',           label: '⑧気分点数' }
+  ];
+
+  const gridEl = document.getElementById('averages-grid');
+  gridEl.innerHTML = '';
+
+  fields.forEach(({ key, label }) => {
+    // nullや未選択(undefined)を除外し、実際に入力された値だけを対象にする
+    const validValues = rows.map((r) => r[key]).filter((v) => v != null);
+
+    let displayVal = '−';
+    let moodClass = '';
+    if (validValues.length > 0) {
+      const avg = validValues.reduce((sum, v) => sum + Number(v), 0) / validValues.length;
+      displayVal = (key === 'mood' && avg > 0) ? `+${avg.toFixed(1)}` : avg.toFixed(1);
+      if (key === 'mood') {
+        moodClass = avg > 0 ? 'mood-positive' : avg < 0 ? 'mood-negative' : 'mood-neutral';
+      }
+    }
+
+    const item = document.createElement('div');
+    item.className = 'avg-item';
+    item.innerHTML = `<span>${escapeHtml(label)}</span><strong class="${moodClass}">${escapeHtml(displayVal)}</strong>`;
+    gridEl.appendChild(item);
+  });
+
+  document.getElementById('avg-count').textContent = String(rows.length);
+}
+
+/** 思考記録の検索結果を一覧カードとして描画する */
+function renderSearchThoughtCards(listEl, rows) {
+  listEl.innerHTML = '';
+  rows.forEach((row) => {
+    const preview = (row.event || '').replace(/\n/g, ' ');
+    const scoreText = [
+      row.pac         != null ? `PAC:${row.pac}` : '',
+      row.objectivity != null ? `A:${row.objectivity}` : '',
+      row.selfAffirm  != null ? `自己:${row.selfAffirm}` : '',
+      row.otherAffirm != null ? `他者:${row.otherAffirm}` : '',
+      row.mood        != null ? `気分:${row.mood > 0 ? '+' : ''}${row.mood}` : ''
+    ].filter(Boolean).join('　');
+
+    const li = document.createElement('li');
+    li.className = 'thought-entry-item';
+    li.innerHTML = `
+      <div class="thought-entry-head">
+        <span class="thought-badge">🧠 思考記録</span>
+        <span class="entry-date-label">${escapeHtml(formatDateJp(row.date))}</span>
+      </div>
+      <div class="thought-entry-scores">${escapeHtml(scoreText)}</div>
+      <div class="thought-entry-preview">${escapeHtml(preview)}</div>
+    `;
+    li.addEventListener('click', () => openThoughtForm(row));
+    listEl.appendChild(li);
+  });
+}
+
+/** ラケット感情の検索結果を一覧カードとして描画する（①②③の内容を表示） */
+function renderSearchRacketCards(listEl, rows) {
+  const preview = (text, len = 24) => {
+    if (!text) return '（未記入）';
+    return text.length > len ? text.slice(0, len) + '…' : text;
+  };
+  listEl.innerHTML = '';
+  rows.forEach((row) => {
+    const li = document.createElement('li');
+    li.className = 'racket-entry-item';
+    li.innerHTML = `
+      <div class="racket-entry-head">
+        <span class="racket-badge">🎭 ラケット感情</span>
+        <span class="entry-date-label">${escapeHtml(row.date)}</span>
+        <span class="entry-seq">#${pad2(row.seq)}</span>
+      </div>
+      <div class="racket-entry-title">${escapeHtml(row.title)}</div>
+      <div class="racket-preview">
+        <div><strong>①出来事：</strong>${escapeHtml(preview(row.racket.event))}</div>
+        <div><strong>②考え：</strong>${escapeHtml(preview(row.racket.thought))}</div>
+        <div><strong>③感情：</strong>${escapeHtml(preview(row.racket.feeling))}</div>
+      </div>
+    `;
+    li.addEventListener('click', () => openRacketTab(row));
+    listEl.appendChild(li);
+  });
 }
 
 async function runSearch() {
-  const keyword = document.getElementById('search-keyword').value.trim().toLowerCase();
+  const target   = document.querySelector('input[name="search-target"]:checked').value;
+  const keyword  = document.getElementById('search-keyword').value.trim().toLowerCase();
   const dateFrom = document.getElementById('search-date-from').value;
-  const dateTo = document.getElementById('search-date-to').value;
-  const tags = appState.selectedTagsSearch;
+  const dateTo   = document.getElementById('search-date-to').value;
+  const tags     = appState.selectedTagsSearch;
+
+  const listEl  = document.getElementById('search-result-list');
+  const emptyEl = document.getElementById('search-result-empty');
+  const avgEl   = document.getElementById('search-thought-averages');
 
   try {
-    const all = await dbGetAllEntries();
-    let filtered = all.filter((row) => {
-      if (keyword) {
-        const inTitle = (row.title || '').toLowerCase().includes(keyword);
-        const inBody = (row.body || '').toLowerCase().includes(keyword);
-        if (!inTitle && !inBody) return false;
-      }
-      if (dateFrom && row.date < dateFrom) return false;
-      if (dateTo && row.date > dateTo) return false;
-      if (tags.size > 0) {
-        const rowTags = row.tags || [];
-        const hasAny = rowTags.some((t) => tags.has(t));
-        if (!hasAny) return false;
-      }
-      return true;
-    });
+    if (target === 'diary') {
+      avgEl.hidden = true;
+      const all = await dbGetAllEntries();
+      let filtered = all.filter((row) => {
+        if (keyword) {
+          const inTitle = (row.title || '').toLowerCase().includes(keyword);
+          const inBody = (row.body || '').toLowerCase().includes(keyword);
+          if (!inTitle && !inBody) return false;
+        }
+        if (dateFrom && row.date < dateFrom) return false;
+        if (dateTo && row.date > dateTo) return false;
+        if (tags.size > 0) {
+          const rowTags = row.tags || [];
+          if (!rowTags.some((t) => tags.has(t))) return false;
+        }
+        return true;
+      });
+      filtered.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.seq - b.seq));
+      renderEntryList(listEl, filtered, true);
+      emptyEl.hidden = filtered.length > 0;
 
-    filtered.sort((a, b) => {
-      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-      return a.seq - b.seq;
-    });
+    } else if (target === 'thought') {
+      const all = await dbGetAllThoughts();
+      let filtered = all.filter((row) => {
+        if (keyword && !(row.event || '').toLowerCase().includes(keyword)) return false;
+        if (dateFrom && row.date < dateFrom) return false;
+        if (dateTo && row.date > dateTo) return false;
+        return true;
+      });
+      filtered.sort((a, b) => (a.date < b.date ? 1 : -1));
 
-    const listEl = document.getElementById('search-result-list');
-    const emptyEl = document.getElementById('search-result-empty');
-    renderEntryList(listEl, filtered, true);
-    emptyEl.hidden = filtered.length > 0;
+      renderSearchThoughtCards(listEl, filtered);
+      emptyEl.hidden = filtered.length > 0;
+
+      if (filtered.length > 0) {
+        renderThoughtAverages(filtered);
+        avgEl.hidden = false;
+      } else {
+        avgEl.hidden = true;
+      }
+
+    } else if (target === 'racket') {
+      avgEl.hidden = true;
+      const all = await dbGetAllEntries();
+      let filtered = all.filter((row) => {
+        if (!row.racket || (!row.racket.event && !row.racket.thought && !row.racket.feeling)) return false;
+        if (keyword) {
+          const r = row.racket;
+          const hit = [r.event, r.thought, r.feeling].some((t) => (t || '').toLowerCase().includes(keyword));
+          if (!hit) return false;
+        }
+        if (dateFrom && row.date < dateFrom) return false;
+        if (dateTo && row.date > dateTo) return false;
+        return true;
+      });
+      filtered.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : b.seq - a.seq));
+      renderSearchRacketCards(listEl, filtered);
+      emptyEl.hidden = filtered.length > 0;
+    }
   } catch (err) {
     showError('検索に失敗しました', err);
   }
 }
+
 
 /* ---------------------------------------------------------
  * 10. PDF出力（日本語フォント：実行時フェッチ＋キャッシュ方式）
@@ -972,6 +1159,8 @@ function initAppOnce() {
   initTagManagement();
   initTabOrderSettings();
   initBiometricSettings();   // ★この1行を追加
+  initOcrHelper();   // ★この1行を追加
+
 
   initTabs();
   initWriteForm();
@@ -1851,5 +2040,56 @@ function initThoughtTab() {
       showThoughtListView();
       refreshThoughtList();
     } catch (err) { showError('保存に失敗しました', err); }
+  });
+}
+/* ---------------------------------------------------------
+ * 19. OCR補助機能（カメラ画像プレビュー＋クリップボード貼り付け）
+ * --------------------------------------------------------- */
+function initOcrHelper() {
+  const fileInput   = document.getElementById('ocr-file-input');
+  const previewArea = document.getElementById('ocr-preview-area');
+  const previewImg  = document.getElementById('ocr-preview-img');
+  const textarea    = document.getElementById('thought-event');
+
+  document.getElementById('btn-ocr-camera').addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      previewImg.src = ev.target.result;
+      previewArea.hidden = false;
+      previewArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('btn-ocr-close').addEventListener('click', () => {
+    previewImg.src = '';
+    previewArea.hidden = true;
+  });
+
+  document.getElementById('btn-ocr-paste').addEventListener('click', async () => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        showToast('この端末では自動貼り付けに対応していません。テキストエリアを長押しして「ペースト」を選んでください');
+        return;
+      }
+      const text = await navigator.clipboard.readText();
+      if (!text) { showToast('クリップボードにテキストがありません'); return; }
+
+      const start = textarea.selectionStart;
+      const end   = textarea.selectionEnd;
+      textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(end);
+      const pos = start + text.length;
+      textarea.setSelectionRange(pos, pos);
+      textarea.focus();
+      showToast(`${text.length}文字を貼り付けました ✅`);
+    } catch (err) {
+      console.error('クリップボード読み取りエラー', err);
+      showToast('クリップボードへのアクセスが許可されていません。テキストエリアを長押しして「ペースト」を選んでください');
+    }
   });
 }
