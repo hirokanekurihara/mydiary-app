@@ -6,7 +6,7 @@
 <title>日記アプリ</title>
 <link rel="apple-touch-icon" href="dinary icon.png">
 <meta name="theme-color" content="#4a7c6f">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <!-- jsPDF (PDF出力用) -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 </head>
@@ -38,15 +38,11 @@
       <button type="button" class="pin-key" data-key="0">0</button>
       <button type="button" class="pin-key pin-key-del" data-key="del">⌫</button>
     </div>
-        <!-- ★追加：Face ID / Touch ID ボタン -->
     <div id="biometric-container" class="biometric-container" hidden>
       <button type="button" id="btn-bio-auth" class="btn btn-secondary btn-block btn-bio">
         😎 Face ID / Touch ID で開く
       </button>
     </div>
-
-    <p id="pin-lock-msg" class="pin-lock-msg" hidden></p>
-
     <p id="pin-lock-msg" class="pin-lock-msg" hidden></p>
   </div>
 </section>
@@ -64,18 +60,17 @@
     <section id="view-write" class="view active-view">
       <h2 class="view-title">新しい記録</h2>
       <form id="entry-form" class="entry-form">
-        <!-- 日時入力（デフォルトは現在日時、過去の記録を書く際は変更可能） -->
-<div class="form-row form-row-range">
-  <div>
-    <label for="entry-date">日付 <span class="required">必須</span></label>
-    <input type="date" id="entry-date" class="date-input" required>
-  </div>
-  <div>
-    <label for="entry-time">時刻 <span class="required">必須</span></label>
-    <input type="time" id="entry-time" class="time-input" required>
-  </div>
-</div>
-<p id="entry-date-display" class="thought-date-display"></p>
+        <div class="form-row form-row-range">
+          <div>
+            <label for="entry-date">日付 <span class="required">必須</span></label>
+            <input type="date" id="entry-date" class="date-input" required>
+          </div>
+          <div>
+            <label for="entry-time">時刻 <span class="required">必須</span></label>
+            <input type="time" id="entry-time" class="time-input" required>
+          </div>
+        </div>
+        <p id="entry-date-display" class="thought-date-display"></p>
 
         <div class="form-row">
           <label for="entry-title">タイトル <span class="required">必須</span></label>
@@ -135,322 +130,260 @@
     </section>
 
     <!-- ---- 検索タブ ---- -->
-    <!-- ---- 検索タブ ---- -->
-<section id="view-search" class="view">
-  <h2 class="view-title">🔍 検索</h2>
-
-  <!-- 検索対象の切り替え -->
-<div class="search-target-selector">
-  <button type="button" class="target-btn active" data-target="diary">📔 日記</button>
-  <button type="button" class="target-btn" data-target="thought">🧠 思考記録</button>
-  <button type="button" class="target-btn" data-target="racket">🎭 ラケット感情</button>
-</div>
-
-
-  <div class="search-form">
-    <div class="form-row">
-      <label for="search-keyword">キーワード</label>
-      <input type="text" id="search-keyword" placeholder="タイトル・本文から検索">
-    </div>
-    <div class="form-row form-row-range">
-      <div>
-        <label for="search-date-from">開始日</label>
-        <input type="date" id="search-date-from" class="date-input">
+    <section id="view-search" class="view">
+      <h2 class="view-title">🔍 検索</h2>
+      <div class="search-target-selector">
+        <button type="button" class="target-btn active" data-target="diary">📔 日記</button>
+        <button type="button" class="target-btn" data-target="thought">🧠 思考記録</button>
+        <button type="button" class="target-btn" data-target="racket">🎭 ラケット感情</button>
       </div>
-      <div>
-        <label for="search-date-to">終了日</label>
-        <input type="date" id="search-date-to" class="date-input">
+      <div class="search-form">
+        <div class="form-row">
+          <label for="search-keyword">キーワード</label>
+          <input type="text" id="search-keyword" placeholder="タイトル・本文から検索">
+        </div>
+        <div class="form-row form-row-range">
+          <div>
+            <label for="search-date-from">開始日</label>
+            <input type="date" id="search-date-from" class="date-input">
+          </div>
+          <div>
+            <label for="search-date-to">終了日</label>
+            <input type="date" id="search-date-to" class="date-input">
+          </div>
+        </div>
+        <div class="form-row" id="search-tags-row">
+          <label>タグ（OR条件）※日記のみ</label>
+          <div class="tag-chips" id="tag-chips-search">
+            <button type="button" class="tag-chip" data-tag="仕事">仕事</button>
+            <button type="button" class="tag-chip" data-tag="プライベート">プライベート</button>
+            <button type="button" class="tag-chip" data-tag="健康">健康</button>
+            <button type="button" class="tag-chip" data-tag="アイデア">アイデア</button>
+            <button type="button" class="tag-chip" data-tag="その他">その他</button>
+          </div>
+        </div>
+        <button type="button" id="btn-search" class="btn btn-primary btn-block">検索する</button>
       </div>
-    </div>
-    <div class="form-row" id="search-tags-row">
-      <label>タグ（OR条件）※日記のみ</label>
-      <div class="tag-chips" id="tag-chips-search">
-        <button type="button" class="tag-chip" data-tag="仕事">仕事</button>
-        <button type="button" class="tag-chip" data-tag="プライベート">プライベート</button>
-        <button type="button" class="tag-chip" data-tag="健康">健康</button>
-        <button type="button" class="tag-chip" data-tag="アイデア">アイデア</button>
-        <button type="button" class="tag-chip" data-tag="その他">その他</button>
+
+      <div id="search-thought-averages" class="thought-averages-card" hidden>
+        <h3>📊 検索期間の平均スコア（<span id="avg-count">0</span>件）</h3>
+        <div class="averages-grid" id="averages-grid"></div>
+        <p class="averages-note">※未記入の項目は平均の計算から除外しています</p>
       </div>
-    </div>
-    <button type="button" id="btn-search" class="btn btn-primary btn-block">検索する</button>
-  </div>
 
-  <!-- 思考記録専用：平均点パネル（対象が思考記録のときのみ表示） -->
-  <div id="search-thought-averages" class="thought-averages-card" hidden>
-    <h3>📊 検索期間の平均スコア（<span id="avg-count">0</span>件）</h3>
-    <div class="averages-grid" id="averages-grid"></div>
-    <p class="averages-note">※未記入の項目は平均の計算から除外しています</p>
-  </div>
+      <ul id="search-result-list" class="entry-list"></ul>
+      <p id="search-result-empty" class="empty-msg" hidden>該当する記録がありません。</p>
+      <button type="button" id="btn-search-pdf" class="btn btn-secondary btn-block" hidden>📄 検索結果をPDF出力（日付順）</button>
+    </section>
 
-  <ul id="search-result-list" class="entry-list"></ul>
-  <p id="search-result-empty" class="empty-msg" hidden>該当する記録がありません。</p>
-  <button type="button" id="btn-search-pdf" class="btn btn-secondary btn-block" hidden>
-  📄 検索結果をPDF出力（日付順）
-</button>
-
-</section>
-
-
-
+    <!-- ---- ラケット感情タブ ---- -->
     <section id="view-racket" class="view">
-  <h2 class="view-title">🎭 ラケット感情分析</h2>
-
-  <!-- 一覧モード -->
-  <div id="racket-list-view">
-    <p class="settings-info">「一覧」タブの各記録にある「🎭 ラケット感情へ」ボタンを押すと、ここに追加されます。</p>
-    <ul id="racket-list" class="racket-entry-list"></ul>
-    <p id="racket-list-empty" class="empty-msg" hidden>まだラケット感情の記録がありません。</p>
-  </div>
-
-  <!-- 入力・編集モード -->
-  <div id="racket-form-view" hidden>
-    <button type="button" id="racket-back-btn" class="btn btn-secondary racket-back-btn">← 一覧へ戻る</button>
-    <form id="racket-form" class="entry-form">
-      <input type="hidden" id="racket-target-id">
-      <p class="settings-info">対象の記録：<strong id="racket-target-title"></strong>（<span id="racket-target-date"></span>）</p>
-      <div class="form-row">
-        <label for="racket-event">① 何があったか（出来事）</label>
-        <textarea id="racket-event" rows="5"></textarea>
+      <h2 class="view-title">🎭 ラケット感情分析</h2>
+      <div id="racket-list-view">
+        <p class="settings-info">「一覧」タブの各記録にある「🎭 ラケット感情へ」ボタンを押すと、ここに追加されます。</p>
+        <ul id="racket-list" class="racket-entry-list"></ul>
+        <p id="racket-list-empty" class="empty-msg" hidden>まだラケット感情の記録がありません。</p>
       </div>
-      <div class="form-row">
-        <label for="racket-thought">② その時の考え</label>
-        <textarea id="racket-thought" rows="4" placeholder="あとから記入できます"></textarea>
-      </div>
-      <div class="form-row">
-        <label for="racket-feeling">③ その時の感情</label>
-        <textarea id="racket-feeling" rows="4" placeholder="あとから記入できます"></textarea>
-      </div>
-      <button type="submit" class="btn btn-primary btn-block">💾 保存する</button>
-    </form>
-  </div>
-</section>
-
-<!-- ============ 思考記録タブ ============ -->
-<section id="view-thought" class="view">
-  <h2 class="view-title">🧠 思考記録</h2>
-
-  <!-- 一覧モード -->
-  <div id="thought-list-view">
-    <button type="button" id="btn-new-thought" class="btn btn-primary btn-block">
-      ＋ 今日の思考記録を書く
-    </button>
-    <ul id="thought-list" class="thought-entry-list"></ul>
-    <p id="thought-list-empty" class="empty-msg" hidden>まだ思考記録がありません。</p>
-  </div>
-
-  <!-- 入力・編集モード -->
-  <div id="thought-form-view" hidden>
-    <button type="button" id="thought-back-btn" class="btn btn-secondary thought-back-btn">← 一覧へ戻る</button>
-
-    <details class="thought-guide">
-      <summary>💡 各項目の意味・書き方（タップで開閉）</summary>
-      <div class="thought-guide-content">
-        <p><strong>② PAC（自他肯定の構え）</strong><br>自分も他者も大切にし、ありのままを認める理想的な人間関係の基本姿勢をどれくらい意識できたか。</p>
-        <p><strong>③ 平行交流</strong><br>ベクトルが真横（C↔C、A↔A、P↔P）に行き来する平行交流をどれくらい意識できたか。</p>
-        <p><strong>④ 客観性（A）</strong><br>刺激する出来事やネガティブな思考に対して、客観性（A）をどれくらい意識できたか。</p>
-        <p><strong>⑤ 自己肯定</strong><br>自己肯定感がどれくらいだったか。</p>
-        <p><strong>⑥ 他者肯定</strong><br>他者肯定感がどれくらいだったか。</p>
-        <p><strong>⑦ 感情表現（FC）</strong><br>感情（FC）の表出がどれくらいできたか。</p>
-        <p><strong>⑧ 気分点数</strong><br>一日の気分点数をー100〜＋100の数値でつけます。普通なら０、最低がー100、最高が＋100です。</p>
-        <p><strong>⑨ 出来事</strong><br>日々の出来事と、その時の心情、Aを意識しどのように客観視できたか（またはできなかったか）、その後どのように思考や言動を適応的なものに修正できたかを記録してください。些細なことでいいので、<strong>自分を褒める文章を毎日、最低１つ以上</strong>書きます。<br><br>例：会社の同僚から頼まれごとをされたが、これまでは自分が忙しくても無理をして請け負っていたが、この時は、Aを上げ客観的に「今は忙しいのでこの後ならばできます」と言えた。<br><br>※上手く行動できなかった場合は、⒈出来事　⒉どのように捉え言動したか　⒊本当はこのように捉え　⒋PACの何を上げこのように言動すべきだったか、を書きます。</p>
-      </div>
-    </details>
-
-    <form id="thought-form" class="entry-form">
-      <!-- ★編集前の元の日付を記憶する（日付変更時の重複防止に必須） -->
-      <input type="hidden" id="thought-edit-date">
-
-      <!-- ①日付 -->
-      <div class="form-row">
-        <label for="thought-date">① 日付</label>
-        <input type="date" id="thought-date" class="date-input" required>
-        <p id="thought-date-display" class="thought-date-display"></p>
-      </div>
-
-      <!-- ②PAC -->
-      <div class="form-row thought-score-row">
-        <label>② PAC（自他肯定の構え）</label>
-        <div class="thought-score-selector" data-field="pac">
-          <span class="thought-score-label" id="pac-label">未選択</span>
-          <div class="thought-score-btns">
-            <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
-            <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
-            <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
-            <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
-            <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+      <div id="racket-form-view" hidden>
+        <button type="button" id="racket-back-btn" class="btn btn-secondary racket-back-btn">← 一覧へ戻る</button>
+        <form id="racket-form" class="entry-form">
+          <input type="hidden" id="racket-target-id">
+          <p class="settings-info">対象の記録：<strong id="racket-target-title"></strong>（<span id="racket-target-date"></span>）</p>
+          <div class="form-row">
+            <label for="racket-event">① 何があったか（出来事）</label>
+            <textarea id="racket-event" rows="5"></textarea>
           </div>
-        </div>
-      </div>
-
-      <!-- ③平行交流 -->
-      <div class="form-row thought-score-row">
-        <label>③ 平行交流</label>
-        <span class="thought-sublabel">家族（配偶者）</span>
-        <div class="thought-score-selector" data-field="parallelFamily">
-          <span class="thought-score-label" id="parallelFamily-label">未選択</span>
-          <div class="thought-score-btns">
-            <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
-            <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
-            <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
-            <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
-            <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+          <div class="form-row">
+            <label for="racket-thought">② その時の考え</label>
+            <textarea id="racket-thought" rows="4" placeholder="あとから記入できます"></textarea>
           </div>
-        </div>
-        <span class="thought-sublabel">他者</span>
-        <div class="thought-score-selector" data-field="parallelOther">
-          <span class="thought-score-label" id="parallelOther-label">未選択</span>
-          <div class="thought-score-btns">
-            <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
-            <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
-            <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
-            <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
-            <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+          <div class="form-row">
+            <label for="racket-feeling">③ その時の感情</label>
+            <textarea id="racket-feeling" rows="4" placeholder="あとから記入できます"></textarea>
           </div>
-        </div>
+          <button type="submit" class="btn btn-primary btn-block">💾 保存する</button>
+        </form>
       </div>
+    </section>
 
-      <!-- ④客観性(A) -->
-      <div class="form-row thought-score-row">
-        <label>④ 客観性（A）</label>
-        <div class="thought-score-selector" data-field="objectivity">
-          <span class="thought-score-label" id="objectivity-label">未選択</span>
-          <div class="thought-score-btns">
-            <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
-            <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
-            <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
-            <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
-            <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+    <!-- ---- 思考記録タブ ---- -->
+    <section id="view-thought" class="view">
+      <h2 class="view-title">🧠 思考記録</h2>
+      <div id="thought-list-view">
+        <button type="button" id="btn-new-thought" class="btn btn-primary btn-block">＋ 今日の思考記録を書く</button>
+        <ul id="thought-list" class="thought-entry-list"></ul>
+        <p id="thought-list-empty" class="empty-msg" hidden>まだ思考記録がありません。</p>
+      </div>
+      <div id="thought-form-view" hidden>
+        <button type="button" id="thought-back-btn" class="btn btn-secondary thought-back-btn">← 一覧へ戻る</button>
+        <details class="thought-guide">
+          <summary>💡 各項目の意味・書き方（タップで開閉）</summary>
+          <div class="thought-guide-content">
+            <p><strong>② PAC（自他肯定の構え）</strong><br>自分も他者も大切にし、ありのままを認める理想的な人間関係の基本姿勢をどれくらい意識できたか。</p>
+            <p><strong>③ 平行交流</strong><br>ベクトルが真横（C↔C、A↔A、P↔P）に行き来する平行交流をどれくらい意識できたか。</p>
+            <p><strong>④ 客観性（A）</strong><br>刺激する出来事やネガティブな思考に対して、客観性（A）をどれくらい意識できたか。</p>
+            <p><strong>⑤ 自己肯定</strong><br>自己肯定感がどれくらいだったか。</p>
+            <p><strong>⑥ 他者肯定</strong><br>他者肯定感がどれくらいだったか。</p>
+            <p><strong>⑦ 感情表現（FC）</strong><br>感情（FC）の表出がどれくらいできたか。</p>
+            <p><strong>⑧ 気分点数</strong><br>一日の気分点数をー100〜＋100の数値でつけます。普通なら０、最低がー100、最高が＋100です。</p>
+            <p><strong>⑨ 出来事</strong><br>日々の出来事と、その時の心情、Aを意識しどのように客観視できたか（またはできなかったか）、その後どのように思考や言動を適応的なものに修正できたかを記録してください。些細なことでいいので、<strong>自分を褒める文章を毎日、最低１つ以上</strong>書きます。<br><br>例：会社の同僚から頼まれごとをされたが、これまでは自分が忙しくても無理をして請け負っていたが、この時は、Aを上げ客観的に「今は忙しいのでこの後ならばできます」と言えた。<br><br>※上手く行動できなかった場合は、⒈出来事　⒉どのように捉え言動したか　⒊本当はこのように捉え　⒋PACの何を上げこのように言動すべきだったか、を書きます。</p>
           </div>
-        </div>
-      </div>
-
-      <!-- ⑤自己肯定 -->
-      <div class="form-row thought-score-row">
-        <label>⑤ 自己肯定</label>
-        <div class="thought-score-selector" data-field="selfAffirm">
-          <span class="thought-score-label" id="selfAffirm-label">未選択</span>
-          <div class="thought-score-btns">
-            <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
-            <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
-            <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
-            <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
-            <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+        </details>
+        <form id="thought-form" class="entry-form">
+          <input type="hidden" id="thought-edit-date">
+          <div class="form-row">
+            <label for="thought-date">① 日付</label>
+            <input type="date" id="thought-date" class="date-input" required>
+            <p id="thought-date-display" class="thought-date-display"></p>
           </div>
-        </div>
-      </div>
-
-      <!-- ⑥他者肯定 -->
-      <div class="form-row thought-score-row">
-        <label>⑥ 他者肯定</label>
-        <div class="thought-score-selector" data-field="otherAffirm">
-          <span class="thought-score-label" id="otherAffirm-label">未選択</span>
-          <div class="thought-score-btns">
-            <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
-            <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
-            <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
-            <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
-            <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+          <div class="form-row thought-score-row">
+            <label>② PAC（自他肯定の構え）</label>
+            <div class="thought-score-selector" data-field="pac">
+              <span class="thought-score-label" id="pac-label">未選択</span>
+              <div class="thought-score-btns">
+                <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
+                <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
+                <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
+                <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
+                <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-
-      <!-- ⑦感情表現(FC) -->
-      <div class="form-row thought-score-row">
-        <label>⑦ 感情表現（FC）</label>
-        <div class="thought-score-selector" data-field="emotion">
-          <span class="thought-score-label" id="emotion-label">未選択</span>
-          <div class="thought-score-btns">
-            <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
-            <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
-            <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
-            <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
-            <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+          <div class="form-row thought-score-row">
+            <label>③ 平行交流</label>
+            <span class="thought-sublabel">家族（配偶者）</span>
+            <div class="thought-score-selector" data-field="parallelFamily">
+              <span class="thought-score-label" id="parallelFamily-label">未選択</span>
+              <div class="thought-score-btns">
+                <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
+                <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
+                <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
+                <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
+                <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+              </div>
+            </div>
+            <span class="thought-sublabel">他者</span>
+            <div class="thought-score-selector" data-field="parallelOther">
+              <span class="thought-score-label" id="parallelOther-label">未選択</span>
+              <div class="thought-score-btns">
+                <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
+                <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
+                <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
+                <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
+                <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+              </div>
+            </div>
           </div>
-        </div>
+          <div class="form-row thought-score-row">
+            <label>④ 客観性（A）</label>
+            <div class="thought-score-selector" data-field="objectivity">
+              <span class="thought-score-label" id="objectivity-label">未選択</span>
+              <div class="thought-score-btns">
+                <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
+                <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
+                <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
+                <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
+                <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row thought-score-row">
+            <label>⑤ 自己肯定</label>
+            <div class="thought-score-selector" data-field="selfAffirm">
+              <span class="thought-score-label" id="selfAffirm-label">未選択</span>
+              <div class="thought-score-btns">
+                <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
+                <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
+                <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
+                <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
+                <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row thought-score-row">
+            <label>⑥ 他者肯定</label>
+            <div class="thought-score-selector" data-field="otherAffirm">
+              <span class="thought-score-label" id="otherAffirm-label">未選択</span>
+              <div class="thought-score-btns">
+                <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
+                <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
+                <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
+                <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
+                <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row thought-score-row">
+            <label>⑦ 感情表現（FC）</label>
+            <div class="thought-score-selector" data-field="emotion">
+              <span class="thought-score-label" id="emotion-label">未選択</span>
+              <div class="thought-score-btns">
+                <button type="button" data-val="1">1</button><button type="button" data-val="2">2</button>
+                <button type="button" data-val="3">3</button><button type="button" data-val="4">4</button>
+                <button type="button" data-val="5">5</button><button type="button" data-val="6">6</button>
+                <button type="button" data-val="7">7</button><button type="button" data-val="8">8</button>
+                <button type="button" data-val="9">9</button><button type="button" data-val="10">10</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="thought-mood">⑧ 気分点数（ー100〜＋100、10刻み）</label>
+            <input type="range" id="thought-mood" min="-100" max="100" step="10" value="0">
+            <div id="thought-mood-value" class="thought-mood-value">0</div>
+          </div>
+          <div class="form-row">
+            <label for="thought-event">⑨ 出来事 <span class="required">必須</span></label>
+            <textarea id="thought-event" rows="8" required placeholder="出来事、その時の心情、Aを意識した客観視、自分を褒める言葉を書きましょう。"></textarea>
+          </div>
+          <div class="thought-form-actions">
+            <button type="button" id="thought-cancel" class="btn btn-secondary btn-half">キャンセル</button>
+            <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
+          </div>
+        </form>
       </div>
-
-      <!-- ⑧気分点数：スライダー -->
-      <div class="form-row">
-        <label for="thought-mood">⑧ 気分点数（ー100〜＋100、10刻み）</label>
-        <input type="range" id="thought-mood" min="-100" max="100" step="10" value="0">
-        <div id="thought-mood-value" class="thought-mood-value">0</div>
-      </div>
-      
-      <!-- ⑨出来事 -->
-      <div class="form-row">
-        <label for="thought-event">⑨ 出来事 <span class="required">必須</span></label>
-        <textarea id="thought-event" rows="8" required
-          placeholder="出来事、その時の心情、Aを意識した客観視、自分を褒める言葉を書きましょう。"></textarea>
-      </div>
-
-      <div class="thought-form-actions">
-        <button type="button" id="thought-cancel" class="btn btn-secondary btn-half">キャンセル</button>
-        <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
-      </div>
-    </form>
-  </div>
-</section>
-
-
-      <!-- ★ここが欠落していた部分：保存・キャンセルボタンとフォームの閉じタグ -->
-      <div class="thought-form-actions">
-        <button type="button" id="thought-cancel" class="btn btn-secondary btn-half">キャンセル</button>
-        <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
-      </div>
-    </form>
-  </div>
-</section>
-
-
+    </section>
 
     <!-- ---- 設定タブ ---- -->
     <section id="view-settings" class="view">
       <h2 class="view-title">設定・バックアップ</h2>
-
       <div class="settings-card">
-        <h3>バックアップ</h3>
+        <h3>📦 バックアップ</h3>
         <p id="last-backup-info" class="settings-info">前回バックアップ：まだありません</p>
         <p id="backup-warning" class="backup-warning" hidden>⚠️ バックアップをおすすめします</p>
         <button type="button" id="btn-backup" class="btn btn-primary btn-block">📦 バックアップ（エクスポート）</button>
       </div>
-
       <div class="settings-card">
-        <h3>インポート（復元）</h3>
+        <h3>📥 インポート（復元）</h3>
         <p class="settings-info">JSONファイルから復元します。既存のデータは全て置き換えられます。</p>
         <input type="file" id="import-file-input" accept="application/json" hidden>
         <button type="button" id="btn-import" class="btn btn-secondary btn-block">📥 インポート</button>
       </div>
-
       <div class="settings-card">
-       
-  <h3>🏷 タグの管理</h3>
-  <p class="settings-info">日記に付けるタグを自由に追加・削除できます。削除しても、過去に付けたタグはそのまま残ります。</p>
-  <div class="tag-manage-form">
-    <input type="text" id="new-tag-input" placeholder="新しいタグ名" maxlength="20">
-    <button type="button" id="btn-add-tag" class="btn btn-primary">追加</button>
-  </div>
-  <div id="settings-tag-list" class="tag-manage-list"></div>
-</div>
-
-<div class="settings-card">
-  <h3>🔄 タブの並び替え</h3>
-  <p class="settings-info">画面下のタブの表示順を変更できます（⚙️設定タブは常に右端に固定されます）。</p>
-  <div id="tab-order-list" class="tab-order-list"></div>
-</div>
-<div class="settings-card">
-  <h3>😎 生体認証（Face ID / Touch ID）</h3>
-  <p class="settings-info">パスコードの代わりに、Face IDやTouch IDでアプリを開けるようにします（事前にPINが設定されている必要があります）。</p>
-  <p id="bio-support-msg" class="settings-info" hidden>⚠️ お使いの端末・ブラウザは生体認証に対応していません</p>
-  <button type="button" id="btn-register-bio" class="btn btn-primary btn-block">生体認証を登録する</button>
-  <button type="button" id="btn-remove-bio" class="btn btn-danger btn-block" hidden>生体認証の登録を解除</button>
-</div>
-
-<div class="settings-card">
-  <h3>🔑 PIN変更</h3>
-  <p class="settings-info">現在のPINを解除して、次回起動時に新しいPINを設定できるようにします。</p>
-  <button type="button" id="btn-reset-pin" class="btn btn-danger btn-block">🔑 PINをリセット</button>
-</div>
-
+        <h3>🏷 タグの管理</h3>
+        <p class="settings-info">日記に付けるタグを自由に追加・削除できます。削除しても、過去に付けたタグはそのまま残ります。</p>
+        <div class="tag-manage-form">
+          <input type="text" id="new-tag-input" placeholder="新しいタグ名" maxlength="20">
+          <button type="button" id="btn-add-tag" class="btn btn-primary">追加</button>
+        </div>
+        <div id="settings-tag-list" class="tag-manage-list"></div>
+      </div>
+      <div class="settings-card">
+        <h3>🔄 タブの並び替え</h3>
+        <p class="settings-info">画面下のタブの表示順を変更できます（⚙️設定タブは常に右端に固定されます）。</p>
+        <div id="tab-order-list" class="tab-order-list"></div>
+      </div>
+      <div class="settings-card">
+        <h3>😎 生体認証（Face ID / Touch ID）</h3>
+        <p class="settings-info">パスコードの代わりに、Face IDやTouch IDでアプリを開けるようにします（事前にPINが設定されている必要があります）。</p>
+        <p id="bio-support-msg" class="settings-info" hidden>⚠️ お使いの端末・ブラウザは生体認証に対応していません</p>
+        <button type="button" id="btn-register-bio" class="btn btn-primary btn-block">生体認証を登録する</button>
+        <button type="button" id="btn-remove-bio" class="btn btn-danger btn-block" hidden>生体認証の登録を解除</button>
+      </div>
+      <div class="settings-card">
+        <h3>🔑 PIN変更</h3>
+        <p class="settings-info">現在のPINを解除して、次回起動時に新しいPINを設定できるようにします。</p>
+        <button type="button" id="btn-reset-pin" class="btn btn-danger btn-block">🔑 PINをリセット</button>
+      </div>
     </section>
 
   </main>
@@ -469,11 +402,11 @@
       <span class="tab-icon">🔍</span><span class="tab-label">検索</span>
     </button>
     <button type="button" class="tab-btn" data-view="view-racket">
-  <span class="tab-icon">🎭</span><span class="tab-label">ラケット</span>
-</button>
-<button type="button" class="tab-btn" data-view="view-thought">
-  <span class="tab-icon">🧠</span><span class="tab-label">思考記録</span>
-</button>
+      <span class="tab-icon">🎭</span><span class="tab-label">ラケット</span>
+    </button>
+    <button type="button" class="tab-btn" data-view="view-thought">
+      <span class="tab-icon">🧠</span><span class="tab-label">思考記録</span>
+    </button>
     <button type="button" class="tab-btn" data-view="view-settings">
       <span class="tab-icon">⚙️</span><span class="tab-label">設定</span>
     </button>
@@ -502,7 +435,6 @@
     <h3 class="modal-heading">✏️ 記録を編集</h3>
     <form id="edit-form">
       <input type="hidden" id="edit-id">
-
       <div class="form-row form-row-range">
         <div>
           <label for="edit-date">日付 <span class="required">必須</span></label>
@@ -513,17 +445,14 @@
           <input type="time" id="edit-time" required>
         </div>
       </div>
-
       <div class="form-row">
         <label for="edit-title">タイトル <span class="required">必須</span></label>
         <input type="text" id="edit-title" required maxlength="100">
       </div>
-
       <div class="form-row">
         <label for="edit-body">本文 <span class="required">必須</span></label>
         <textarea id="edit-body" rows="6" required></textarea>
       </div>
-
       <div class="form-row">
         <label>気分</label>
         <div class="mood-picker" id="edit-mood-picker">
@@ -534,7 +463,6 @@
           <button type="button" class="mood-btn" data-mood="5" aria-label="とても良い">😊</button>
         </div>
       </div>
-
       <div class="form-row">
         <label>タグ</label>
         <div class="tag-chips" id="edit-tag-chips">
@@ -545,19 +473,17 @@
           <button type="button" class="tag-chip" data-tag="その他">その他</button>
         </div>
       </div>
-
       <div class="edit-form-actions">
         <button type="button" id="edit-cancel" class="btn btn-secondary btn-half">キャンセル</button>
-        <button type="submit"                  class="btn btn-primary   btn-half">💾 保存</button>
+        <button type="submit" class="btn btn-primary btn-half">💾 保存</button>
       </div>
     </form>
   </div>
 </div>
 
-
 <!-- ============ トースト通知 ============ -->
 <div id="toast" class="toast" hidden></div>
 
-<script src="script.js?v=3"></script>
+<script src="script.js?v=4"></script>
 </body>
 </html>
