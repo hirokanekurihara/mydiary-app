@@ -64,6 +64,19 @@
     <section id="view-write" class="view active-view">
       <h2 class="view-title">新しい記録</h2>
       <form id="entry-form" class="entry-form">
+        <!-- 日時入力（デフォルトは現在日時、過去の記録を書く際は変更可能） -->
+<div class="form-row form-row-range">
+  <div>
+    <label for="entry-date">日付 <span class="required">必須</span></label>
+    <input type="date" id="entry-date" class="date-input" required>
+  </div>
+  <div>
+    <label for="entry-time">時刻 <span class="required">必須</span></label>
+    <input type="time" id="entry-time" class="time-input" required>
+  </div>
+</div>
+<p id="entry-date-display" class="thought-date-display"></p>
+
         <div class="form-row">
           <label for="entry-title">タイトル <span class="required">必須</span></label>
           <input type="text" id="entry-title" placeholder="今日の見出し" required maxlength="100">
@@ -122,38 +135,62 @@
     </section>
 
     <!-- ---- 検索タブ ---- -->
-    <section id="view-search" class="view">
-      <h2 class="view-title">検索</h2>
-      <div class="search-form">
-        <div class="form-row">
-          <label for="search-keyword">キーワード</label>
-          <input type="text" id="search-keyword" placeholder="タイトル・本文から検索">
-        </div>
-        <div class="form-row form-row-range">
-          <div>
-            <label for="search-date-from">開始日</label>
-            <input type="date" id="search-date-from" class="date-input">
-          </div>
-          <div>
-            <label for="search-date-to">終了日</label>
-            <input type="date" id="search-date-to" class="date-input">
-          </div>
-        </div>
-        <div class="form-row">
-          <label>タグ（OR条件）</label>
-          <div class="tag-chips" id="tag-chips-search">
-            <button type="button" class="tag-chip" data-tag="仕事">仕事</button>
-            <button type="button" class="tag-chip" data-tag="プライベート">プライベート</button>
-            <button type="button" class="tag-chip" data-tag="健康">健康</button>
-            <button type="button" class="tag-chip" data-tag="アイデア">アイデア</button>
-            <button type="button" class="tag-chip" data-tag="その他">その他</button>
-          </div>
-        </div>
-        <button type="button" id="btn-search" class="btn btn-primary btn-block">検索する</button>
+    <!-- ---- 検索タブ ---- -->
+<section id="view-search" class="view">
+  <h2 class="view-title">🔍 検索</h2>
+
+  <!-- 検索対象の切り替え -->
+  <div class="search-target-selector">
+    <label class="target-option active" data-target="diary">
+      <input type="radio" name="search-target" value="diary" checked>📔 日記
+    </label>
+    <label class="target-option" data-target="thought">
+      <input type="radio" name="search-target" value="thought">🧠 思考記録
+    </label>
+    <label class="target-option" data-target="racket">
+      <input type="radio" name="search-target" value="racket">🎭 ラケット感情
+    </label>
+  </div>
+
+  <div class="search-form">
+    <div class="form-row">
+      <label for="search-keyword">キーワード</label>
+      <input type="text" id="search-keyword" placeholder="タイトル・本文から検索">
+    </div>
+    <div class="form-row form-row-range">
+      <div>
+        <label for="search-date-from">開始日</label>
+        <input type="date" id="search-date-from" class="date-input">
       </div>
-      <ul id="search-result-list" class="entry-list"></ul>
-      <p id="search-result-empty" class="empty-msg" hidden>該当する記録がありません。</p>
-    </section>
+      <div>
+        <label for="search-date-to">終了日</label>
+        <input type="date" id="search-date-to" class="date-input">
+      </div>
+    </div>
+    <div class="form-row" id="search-tags-row">
+      <label>タグ（OR条件）※日記のみ</label>
+      <div class="tag-chips" id="tag-chips-search">
+        <button type="button" class="tag-chip" data-tag="仕事">仕事</button>
+        <button type="button" class="tag-chip" data-tag="プライベート">プライベート</button>
+        <button type="button" class="tag-chip" data-tag="健康">健康</button>
+        <button type="button" class="tag-chip" data-tag="アイデア">アイデア</button>
+        <button type="button" class="tag-chip" data-tag="その他">その他</button>
+      </div>
+    </div>
+    <button type="button" id="btn-search" class="btn btn-primary btn-block">検索する</button>
+  </div>
+
+  <!-- 思考記録専用：平均点パネル（対象が思考記録のときのみ表示） -->
+  <div id="search-thought-averages" class="thought-averages-card" hidden>
+    <h3>📊 検索期間の平均スコア（<span id="avg-count">0</span>件）</h3>
+    <div class="averages-grid" id="averages-grid"></div>
+    <p class="averages-note">※未記入の項目は平均の計算から除外しています</p>
+  </div>
+
+  <ul id="search-result-list" class="entry-list"></ul>
+  <p id="search-result-empty" class="empty-msg" hidden>該当する記録がありません。</p>
+</section>
+
 
 
     <section id="view-racket" class="view">
@@ -342,17 +379,25 @@
 
       <!-- ⑨出来事 -->
       <div class="form-row">
-        <label for="thought-event">⑨ 出来事 <span class="required">必須</span></label>
-        <textarea id="thought-event" rows="8" required
-          placeholder="出来事、その時の心情、Aを意識した客観視、自分を褒める言葉を書きましょう。"></textarea>
-      </div>
+  <label for="thought-event">⑨ 出来事 <span class="required">必須</span></label>
 
-      <div class="thought-form-actions">
-        <button type="button" id="thought-cancel" class="btn btn-secondary btn-half">キャンセル</button>
-        <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
-      </div>
-    </form>
+  <div class="ocr-toolbar">
+    <button type="button" id="btn-ocr-camera" class="btn-ocr">📷 カメラ・画像から取り込む</button>
+    <button type="button" id="btn-ocr-paste" class="btn-ocr">📋 クリップボードから貼り付け</button>
   </div>
+
+  <div id="ocr-preview-area" class="ocr-preview-area" hidden>
+    <p class="ocr-guide">📌 画像内の文字を長押しして選択・コピーし、上の「📋 クリップボードから貼り付け」を押してください。</p>
+    <img id="ocr-preview-img" class="ocr-preview-img" src="" alt="選択した画像">
+    <button type="button" id="btn-ocr-close" class="btn-ocr btn-ocr-close">✕ 画像を閉じる</button>
+  </div>
+
+  <input type="file" id="ocr-file-input" accept="image/*" capture="environment" hidden>
+
+  <textarea id="thought-event" rows="8" required
+    placeholder="出来事、その時の心情、Aを意識した客観視、自分を褒める言葉を書きましょう。"></textarea>
+</div>
+
 </section>
 
 
