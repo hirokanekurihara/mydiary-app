@@ -376,8 +376,11 @@ const appState = {
   calMonth: new Date().getMonth(), // 0-indexed
   calSelectedDate: todayStr(),
   currentDetailEntry: null,
-  appInitialized: false
+  appInitialized: false,
+  lastSearchTarget: 'diary',    // ★追加：直近の検索対象（PDF出力に使う）
+  lastSearchResults: []         // ★追加：直近の検索結果（PDF出力に使う）
 };
+
 
 /* ---------------------------------------------------------
  * 4. タブ切替
@@ -706,32 +709,37 @@ function initSearchView() {
 
   document.getElementById('btn-search').addEventListener('click', runSearch);
 
-  // 検索対象の切り替え（ラジオボタン）
-  document.querySelectorAll('input[name="search-target"]').forEach((radio) => {
-    radio.addEventListener('change', (e) => {
-      const target = e.target.value;
+  // 検索対象の切り替え（通常ボタン方式）
+  document.querySelectorAll('.target-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.target-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.target;
 
-      // 見た目（アクティブ表示）を切り替える
-      document.querySelectorAll('.target-option').forEach((label) => {
-        label.classList.toggle('active', label.dataset.target === target);
-      });
-
-      // タグ欄は日記のときだけ表示する
       document.getElementById('search-tags-row').hidden = (target !== 'diary');
 
-      // キーワード欄のプレースホルダーを対象に応じて変える
       const kw = document.getElementById('search-keyword');
       if (target === 'diary')   kw.placeholder = 'タイトル・本文から検索';
       if (target === 'thought') kw.placeholder = '出来事から検索';
       if (target === 'racket')  kw.placeholder = '出来事・考え・感情から検索';
 
-      // 対象を切り替えたら、古い検索結果は一旦クリアする
       document.getElementById('search-result-list').innerHTML = '';
       document.getElementById('search-result-empty').hidden = true;
       document.getElementById('search-thought-averages').hidden = true;
+      document.getElementById('btn-search-pdf').hidden = true;
     });
   });
+
+  document.getElementById('btn-search-pdf').addEventListener('click', () => {
+    exportSearchResultsToPdf(
+      appState.lastSearchTarget,
+      appState.lastSearchResults,
+      document.getElementById('search-date-from').value,
+      document.getElementById('search-date-to').value
+    );
+  });
 }
+
 
 /** 思考記録の平均スコアを計算し、パネルに描画する */
 function renderThoughtAverages(rows) {
@@ -777,13 +785,18 @@ function renderSearchThoughtCards(listEl, rows) {
   listEl.innerHTML = '';
   rows.forEach((row) => {
     const preview = (row.event || '').replace(/\n/g, ' ');
-    const scoreText = [
-      row.pac         != null ? `PAC:${row.pac}` : '',
-      row.objectivity != null ? `A:${row.objectivity}` : '',
-      row.selfAffirm  != null ? `自己:${row.selfAffirm}` : '',
-      row.otherAffirm != null ? `他者:${row.otherAffirm}` : '',
-      row.mood        != null ? `気分:${row.mood > 0 ? '+' : ''}${row.mood}` : ''
-    ].filter(Boolean).join('　');
+ const scoreText = [
+  row.pac            != null ? `②PAC：${row.pac}` : '',
+  row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
+  row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
+  row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
+  row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
+  row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
+  row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
+  row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
+].filter(Boolean).join('　');
+
+
 
     const li = document.createElement('li');
     li.className = 'thought-entry-item';
@@ -829,7 +842,7 @@ function renderSearchRacketCards(listEl, rows) {
 }
 
 async function runSearch() {
-  const target   = document.querySelector('input[name="search-target"]:checked').value;
+  const target   = document.querySelector('.target-btn.active').dataset.target;
   const keyword  = document.getElementById('search-keyword').value.trim().toLowerCase();
   const dateFrom = document.getElementById('search-date-from').value;
   const dateTo   = document.getElementById('search-date-to').value;
@@ -838,6 +851,10 @@ async function runSearch() {
   const listEl  = document.getElementById('search-result-list');
   const emptyEl = document.getElementById('search-result-empty');
   const avgEl   = document.getElementById('search-thought-averages');
+  const pdfBtn  = document.getElementById('btn-search-pdf');
+
+  appState.lastSearchTarget = target;
+  appState.lastSearchResults = [];
 
   try {
     if (target === 'diary') {
@@ -852,14 +869,15 @@ async function runSearch() {
         if (dateFrom && row.date < dateFrom) return false;
         if (dateTo && row.date > dateTo) return false;
         if (tags.size > 0) {
-          const rowTags = row.tags || [];
-          if (!rowTags.some((t) => tags.has(t))) return false;
+          if (!(row.tags || []).some((t) => tags.has(t))) return false;
         }
         return true;
       });
       filtered.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.seq - b.seq));
       renderEntryList(listEl, filtered, true);
       emptyEl.hidden = filtered.length > 0;
+      appState.lastSearchResults = filtered;
+      pdfBtn.hidden = filtered.length === 0;
 
     } else if (target === 'thought') {
       const all = await dbGetAllThoughts();
@@ -869,10 +887,13 @@ async function runSearch() {
         if (dateTo && row.date > dateTo) return false;
         return true;
       });
-      filtered.sort((a, b) => (a.date < b.date ? 1 : -1));
+      // ★日毎に並べる（古い日付→新しい日付）
+      filtered.sort((a, b) => (a.date < b.date ? -1 : 1));
 
       renderSearchThoughtCards(listEl, filtered);
       emptyEl.hidden = filtered.length > 0;
+      appState.lastSearchResults = filtered;
+      pdfBtn.hidden = filtered.length === 0;
 
       if (filtered.length > 0) {
         renderThoughtAverages(filtered);
@@ -888,21 +909,24 @@ async function runSearch() {
         if (!row.racket || (!row.racket.event && !row.racket.thought && !row.racket.feeling)) return false;
         if (keyword) {
           const r = row.racket;
-          const hit = [r.event, r.thought, r.feeling].some((t) => (t || '').toLowerCase().includes(keyword));
-          if (!hit) return false;
+          if (![r.event, r.thought, r.feeling].some((t) => (t || '').toLowerCase().includes(keyword))) return false;
         }
         if (dateFrom && row.date < dateFrom) return false;
         if (dateTo && row.date > dateTo) return false;
         return true;
       });
-      filtered.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : b.seq - a.seq));
+      // ★日記・思考記録と同じく、日毎に並べる（古い日付→新しい日付）
+      filtered.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.seq - b.seq));
       renderSearchRacketCards(listEl, filtered);
       emptyEl.hidden = filtered.length > 0;
+      appState.lastSearchResults = filtered;
+      pdfBtn.hidden = filtered.length === 0;
     }
   } catch (err) {
     showError('検索に失敗しました', err);
   }
 }
+
 
 
 /* ---------------------------------------------------------
@@ -1684,21 +1708,17 @@ function switchToPinAfterBioFail() {
 async function triggerBiometricAuth() {
   try {
     await verifyBiometric();
-    // 成功時はverifyBiometric()の内部でunlockApp()が呼ばれるため、ここには戻ってきません
+    // 成功時はverifyBiometric()内でunlockApp()が呼ばれるため、ここには戻ってきません
   } catch (err) {
     console.error('生体認証エラー', err.name, err.message);
     bioFailCount++;
-
-    if (bioFailCount >= MAX_BIO_FAIL) {
-      // 3回失敗→ボタンを経由せず、自動的にPIN入力画面へ切り替える
-      switchToPinAfterBioFail();
-    } else {
-      // 1〜2回目の失敗→ボタンは表示せず、少し待って自動的に再試行する
-      document.getElementById('pin-message').textContent = 'もう一度試しています…';
-      setTimeout(() => { triggerBiometricAuth(); }, 800);
-    }
+    // ★自動再試行は行わず、その場で静かにPIN入力へ切り替える
+    //  （Face IDの失敗は環境的な要因が多く、その場で連続して呼び出しても
+    //    同じ結果になりがちで、結果的にダイアログが連続表示され混乱を招くため）
+    switchToPinAfterBioFail();
   }
 }
+
 
 
 
@@ -1954,13 +1974,17 @@ async function refreshThoughtList() {
     listEl.innerHTML = '';
     rows.forEach((row) => {
       const preview = (row.event || '').replace(/\n/g, ' ');
-      const scoreText = [
-        row.pac != null ? `PAC:${row.pac}` : '',
-        row.objectivity != null ? `A:${row.objectivity}` : '',
-        row.selfAffirm != null ? `自己:${row.selfAffirm}` : '',
-        row.otherAffirm != null ? `他者:${row.otherAffirm}` : '',
-        row.mood != null ? `気分:${row.mood > 0 ? '+' : ''}${row.mood}` : ''
-      ].filter(Boolean).join('　');
+    const scoreText = [
+  row.pac            != null ? `②PAC：${row.pac}` : '',
+  row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
+  row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
+  row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
+  row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
+  row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
+  row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
+  row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
+].filter(Boolean).join('　');
+
       const li = document.createElement('li');
       li.className = 'thought-entry-item';
       li.innerHTML = `
@@ -2092,4 +2116,144 @@ function initOcrHelper() {
       showToast('クリップボードへのアクセスが許可されていません。テキストエリアを長押しして「ペースト」を選んでください');
     }
   });
+}
+/* ---------------------------------------------------------
+ * 20. 検索結果のPDF出力
+ * --------------------------------------------------------- */
+async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
+  if (!rows || rows.length === 0) { showToast('出力する検索結果がありません'); return; }
+  showToast('PDFを生成しています…');
+
+  try {
+    let fontBase64;
+    try {
+      fontBase64 = await getJapaneseFontBase64();
+    } catch (err) {
+      showToast('⚠️ 日本語フォントの読み込みに失敗しました。ネット接続を確認して再度お試しください');
+      return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64);
+    doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal');
+    doc.setFont('NotoSansJP');
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 40;
+    const marginBottom = 50;
+    let y = 60;
+
+    function ensureSpace(h) {
+      if (y + h > pageHeight - marginBottom) {
+        doc.addPage();
+        doc.setFont('NotoSansJP');
+        y = 50;
+      }
+    }
+    function drawLine(color = 220) {
+      ensureSpace(16);
+      doc.setDrawColor(color);
+      doc.line(marginX, y, pageWidth - marginX, y);
+      y += 16;
+    }
+    function writeText(text, size, indent = 0) {
+      doc.setFontSize(size);
+      const lines = doc.splitTextToSize(text, pageWidth - marginX * 2 - indent);
+      lines.forEach((line) => {
+        ensureSpace(size * 1.5);
+        doc.text(line, marginX + indent, y);
+        y += size * 1.5;
+      });
+    }
+
+    const targetLabel = target === 'diary' ? '📔 日記' : target === 'thought' ? '🧠 思考記録' : '🎭 ラケット感情';
+    const periodLabel = (dateFrom || dateTo) ? `${dateFrom || '〜'}　〜　${dateTo || '〜'}` : '全期間';
+
+    doc.setFontSize(20);
+    doc.text(targetLabel + ' 検索結果', marginX, y);
+    y += 30;
+    doc.setFontSize(12);
+    doc.text(`期間：${periodLabel}　　件数：${rows.length}件`, marginX, y);
+    y += 10;
+    drawLine(180);
+
+    // ===== 思考記録：表紙に期間平均スコアを掲載 =====
+    if (target === 'thought') {
+      const scoreFields = [
+        { key: 'pac',            label: '② PAC（自他肯定の構え）' },
+        { key: 'parallelFamily', label: '③ 平行交流：家族（配偶者）' },
+        { key: 'parallelOther',  label: '③ 平行交流：他者' },
+        { key: 'objectivity',    label: '④ 客観性（A）' },
+        { key: 'selfAffirm',     label: '⑤ 自己肯定' },
+        { key: 'otherAffirm',    label: '⑥ 他者肯定' },
+        { key: 'emotion',        label: '⑦ 感情表現（FC）' },
+        { key: 'mood',           label: '⑧ 気分点数' }
+      ];
+      ensureSpace(20);
+      doc.setFontSize(13);
+      doc.text('■ 期間平均スコア', marginX, y);
+      y += 20;
+      scoreFields.forEach(({ key, label }) => {
+        const vals = rows.map((r) => r[key]).filter((v) => v != null);
+        let valStr = '−（未記入）';
+        if (vals.length > 0) {
+          const avg = vals.reduce((s, v) => s + Number(v), 0) / vals.length;
+          valStr = key === 'mood' ? (avg > 0 ? `+${avg.toFixed(1)}` : avg.toFixed(1)) : `${avg.toFixed(1)} / 10`;
+          valStr += `（${vals.length}件の平均）`;
+        }
+        ensureSpace(16);
+        doc.setFontSize(10);
+        doc.text(`${label}：${valStr}`, marginX + 10, y);
+        y += 16;
+      });
+      drawLine(200);
+    }
+
+    // ===== 本文：日付順に各レコードを出力 =====
+    rows.forEach((row, idx) => {
+      if (idx > 0) drawLine(220);
+
+      if (target === 'diary') {
+        const moodEmoji = row.mood ? (MOOD_EMOJI[row.mood] || '') : '';
+        writeText(`#${pad2(row.seq)}　${row.date}　${row.time}　${moodEmoji}`, 13);
+        if (row.tags && row.tags.length > 0) writeText('タグ：' + row.tags.join('、'), 9);
+        writeText(row.title, 12);
+        writeText(row.body || '', 10);
+
+      } else if (target === 'thought') {
+        writeText(formatDateJp(row.date), 13);
+        const scores = [
+          row.pac            != null ? `②PAC:${row.pac}` : '',
+          row.parallelFamily != null ? `③平行(家族):${row.parallelFamily}` : '',
+          row.parallelOther  != null ? `③平行(他者):${row.parallelOther}` : '',
+          row.objectivity    != null ? `④客観性(A):${row.objectivity}` : '',
+          row.selfAffirm     != null ? `⑤自己肯定:${row.selfAffirm}` : '',
+          row.otherAffirm    != null ? `⑥他者肯定:${row.otherAffirm}` : '',
+          row.emotion        != null ? `⑦感情(FC):${row.emotion}` : '',
+          row.mood           != null ? `⑧気分:${row.mood > 0 ? '+' : ''}${row.mood}` : ''
+        ].filter(Boolean).join('　');
+        if (scores) writeText(scores, 9);
+        writeText('【⑨出来事】', 10);
+        writeText(row.event || '', 10);
+
+      } else if (target === 'racket') {
+        writeText(`${row.date}　#${pad2(row.seq)}　${row.title}`, 13);
+        writeText('【①出来事】', 10);
+        writeText(row.racket.event   || '（未記入）', 10);
+        writeText('【②考え】', 10);
+        writeText(row.racket.thought || '（未記入）', 10);
+        writeText('【③感情】', 10);
+        writeText(row.racket.feeling || '（未記入）', 10);
+      }
+    });
+
+    const fromSlug = dateFrom ? dateFrom.replace(/-/g, '') : 'all';
+    const toSlug   = dateTo   ? dateTo.replace(/-/g, '')   : 'all';
+    doc.save(`search_${target}_${fromSlug}-${toSlug}.pdf`);
+    showToast('PDFを保存しました 📄');
+  } catch (err) {
+    showError('PDF出力に失敗しました', err);
+  }
 }
