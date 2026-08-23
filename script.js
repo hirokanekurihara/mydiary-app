@@ -43,9 +43,10 @@ function escapeHtml(str) {
  * 1. IndexedDB ラッパー
  * --------------------------------------------------------- */
 const DB_NAME = 'DiaryDB';
-const DB_VERSION = 2;               // ★ 1 → 2 に変更
+const DB_VERSION = 3;               // ★ 2 → 3 に変更
 const STORE_NAME = 'entries';
-const THOUGHT_STORE = 'thoughts';   // ★ 追加
+const THOUGHT_STORE = 'thoughts';
+const VOICE_STORE = 'voices';       // ★ 追加
 
 
 let dbInstance = null;
@@ -66,6 +67,11 @@ function openDB() {
 if (!db.objectStoreNames.contains(THOUGHT_STORE)) {
   db.createObjectStore(THOUGHT_STORE, { keyPath: 'date' });
 }
+      // ★心のメモ用ストア（idの自動連番を主キーにする）
+      if (!db.objectStoreNames.contains(VOICE_STORE)) {
+        db.createObjectStore(VOICE_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+
 };
 
     req.onsuccess = (event) => {
@@ -420,6 +426,11 @@ function switchView(viewId) {
     showThoughtListView();
     refreshThoughtList();
   }
+    if (viewId === 'view-voice') {
+    showVoiceListView();
+    refreshVoiceList();
+  }
+
 }
 
 
@@ -1080,14 +1091,17 @@ async function doBackup() {
   try {
     const entries = await dbGetAllEntries();
     const nowIso = new Date().toISOString();
-    const thoughts = await dbGetAllThoughts();  // ★ 追加
-const payload = {
-  version: 1,
-  exportedAt: nowIso,
-  entries,
-  customTags,
-  thoughts   // ★ 追加
-};
+        const thoughts = await dbGetAllThoughts();
+    const voices = await dbGetAllVoices();       // ★ 追加
+    const payload = {
+      version: 1,
+      exportedAt: nowIso,
+      entries,
+      customTags,
+      thoughts,
+      voices    // ★ 追加
+    };
+
 
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1163,6 +1177,10 @@ async function handleImportFile(e) {
     if (Array.isArray(json.thoughts)) {
       await dbBulkAddThoughts(json.thoughts);
     }
+        if (Array.isArray(json.voices)) {
+      await dbBulkAddVoices(json.voices);
+    }
+
 
     showToast('復元が完了しました ✅');
     await refreshListView();
@@ -1203,6 +1221,7 @@ function initAppOnce() {
   safeInit('initSettingsView', initSettingsView);
   safeInit('initRacketTab', initRacketTab);
   safeInit('initThoughtTab', initThoughtTab);
+  safeInit('initVoiceTab', initVoiceTab);
 
   safeInit('bindRacketMigrateButtons(entry-list)', () =>
     bindRacketMigrateButtons(document.getElementById('entry-list')));
@@ -1601,8 +1620,10 @@ const SORTABLE_TABS = [
   { id: 'view-calendar', icon: '📅', label: 'カレンダー' },
   { id: 'view-search',   icon: '🔍', label: '検索' },
   { id: 'view-racket',   icon: '🎭', label: 'ラケット' },
-  { id: 'view-thought',  icon: '🧠', label: '思考記録' }
+  { id: 'view-thought',  icon: '🧠', label: '思考記録' },
+  { id: 'view-voice',    icon: '💭', label: '心のメモ' }
 ];
+
 
 
 let currentTabOrder = [];
@@ -2266,4 +2287,206 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
   } catch (err) {
     showError('PDF出力に失敗しました', err);
   }
+}
+/* ---------------------------------------------------------
+ * 21. 心のメモタブ
+ * --------------------------------------------------------- */
+
+async function dbGetAllVoices() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(VOICE_STORE, 'readonly').objectStore(VOICE_STORE).getAll();
+    req.onsuccess = () => {
+      const rows = req.result || [];
+      rows.sort((a, b) => {
+        // date/timeがあればそれを、無ければ作成日時(createdAt)を比較キーにする
+        const aKey = (a.date && a.time) ? `${a.date} ${a.time}` : (a.createdAt || '');
+        const bKey = (b.date && b.time) ? `${b.date} ${b.time}` : (b.createdAt || '');
+        if (aKey === bKey) return 0;
+        return aKey < bKey ? 1 : -1; // 新しい日時が上に来るようにする
+      });
+      resolve(rows);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbGetVoiceById(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(VOICE_STORE, 'readonly').objectStore(VOICE_STORE).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbSaveVoice(voice) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(VOICE_STORE, 'readwrite').objectStore(VOICE_STORE).put(voice);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDeleteVoice(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(VOICE_STORE, 'readwrite').objectStore(VOICE_STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbBulkAddVoices(voices) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(VOICE_STORE, 'readwrite');
+    const store = tx.objectStore(VOICE_STORE);
+    voices.forEach((v) => {
+      const clone = Object.assign({}, v);
+      delete clone.id; // idは自動連番に任せる（重複キー衝突回避）
+      store.add(clone);
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+/** 心のメモの日時入力欄に、現在の日時をセットする */
+function setVoiceFormDateTime() {
+  const now = new Date();
+  document.getElementById('voice-date').value = formatDate(now);
+  document.getElementById('voice-time').value = formatTime(now);
+  updateVoiceDateDisplay();
+}
+
+/** 日付欄の下に、日本語表記（例：2026年7月28日）を表示する */
+function updateVoiceDateDisplay() {
+  const val = document.getElementById('voice-date').value;
+  document.getElementById('voice-date-display').textContent = formatDateJp(val);
+}
+
+function showVoiceListView() {
+  document.getElementById('voice-list-view').hidden = false;
+  document.getElementById('voice-form-view').hidden = true;
+}
+function showVoiceFormView() {
+  document.getElementById('voice-list-view').hidden = true;
+  document.getElementById('voice-form-view').hidden = false;
+}
+
+function openVoiceForm(record) {
+  document.getElementById('voice-edit-id').value = record ? record.id : '';
+  document.getElementById('voice-content').value = record ? record.content : '';
+
+  if (record) {
+    // ★date/timeが無い（今回の更新より前に書かれた）記録の場合は、
+    //   作成日時(createdAt)から自動的に補完する
+    const fallback = record.createdAt ? new Date(record.createdAt) : new Date();
+    document.getElementById('voice-date').value = record.date || formatDate(fallback);
+    document.getElementById('voice-time').value = record.time || formatTime(fallback);
+  } else {
+    setVoiceFormDateTime();
+    return; // setVoiceFormDateTime内でupdateVoiceDateDisplayまで実行済み
+  }
+  updateVoiceDateDisplay();
+
+  document.getElementById('voice-delete').hidden = !record;
+  showVoiceFormView();
+}
+
+
+async function refreshVoiceList() {
+  const listEl = document.getElementById('voice-list');
+  const emptyEl = document.getElementById('voice-list-empty');
+  try {
+    const rows = await dbGetAllVoices(); // すでに新しい日時順に並んだ状態で返ってくる
+    listEl.innerHTML = '';
+    rows.forEach((row) => {
+      const fallback = row.createdAt ? new Date(row.createdAt) : null;
+      const dateLabel = (row.date && row.time)
+        ? `${formatDateJp(row.date)} ${row.time}`
+        : (fallback ? `${formatDateJp(formatDate(fallback))} ${formatTime(fallback)}` : '（日時不明）');
+
+      const lines = (row.content || '').split('\n').map((l) => l.trim()).filter((l) => l !== '');
+      const previewLines = lines.slice(0, 3);
+      const remaining = lines.length - previewLines.length;
+
+      const li = document.createElement('li');
+      li.className = 'voice-entry-item';
+      li.innerHTML = `
+        <div class="voice-entry-head">
+          <span class="voice-badge">💭 心のメモ</span>
+          <span class="voice-entry-date">${escapeHtml(dateLabel)}</span>
+        </div>
+        <ul class="voice-entry-preview">
+          ${previewLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+        </ul>
+        ${remaining > 0 ? `<p class="voice-entry-more">…他${remaining}行</p>` : ''}
+      `;
+      li.addEventListener('click', () => openVoiceForm(row));
+      listEl.appendChild(li);
+    });
+    emptyEl.hidden = rows.length > 0;
+  } catch (err) {
+    showError('心のメモの一覧取得に失敗しました', err);
+  }
+}
+
+
+function initVoiceTab() {
+  document.getElementById('voice-date').addEventListener('change', updateVoiceDateDisplay);
+
+  document.getElementById('btn-new-voice').addEventListener('click', () => openVoiceForm(null));
+
+  document.getElementById('voice-back-btn').addEventListener('click', () => {
+    showVoiceListView();
+    refreshVoiceList();
+  });
+  document.getElementById('voice-cancel').addEventListener('click', () => {
+    showVoiceListView();
+    refreshVoiceList();
+  });
+
+  document.getElementById('voice-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const idVal   = document.getElementById('voice-edit-id').value;
+    const date    = document.getElementById('voice-date').value;
+    const time    = document.getElementById('voice-time').value;
+    const content = document.getElementById('voice-content').value.trim();
+
+    if (!date || !time) { showToast('日付と時刻を入力してください'); return; }
+    if (!content)       { showToast('内容を入力してください'); return; }
+
+    const now = new Date().toISOString();
+    const record = { date, time, content, updatedAt: now };
+
+    try {
+      if (idVal) {
+        const existing = await dbGetVoiceById(Number(idVal));
+        record.id = Number(idVal);
+        record.createdAt = existing ? existing.createdAt : now;
+      } else {
+        record.createdAt = now;
+      }
+
+      await dbSaveVoice(record);
+      showToast('保存しました ✅');
+      showVoiceListView();
+      refreshVoiceList();
+    } catch (err) {
+      showError('保存に失敗しました', err);
+    }
+  });
+
+  document.getElementById('voice-delete').addEventListener('click', async () => {
+    const idVal = document.getElementById('voice-edit-id').value;
+    if (!idVal) return;
+    if (!confirm('この記録を削除します。よろしいですか？')) return;
+    try {
+      await dbDeleteVoice(Number(idVal));
+      showToast('削除しました');
+      showVoiceListView();
+      refreshVoiceList();
+    } catch (err) {
+      showError('削除に失敗しました', err);
+    }
+  });
 }
