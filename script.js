@@ -218,7 +218,6 @@ function initPinScreen() {
     pinState.mode = 'verify';
     const bioCredId = localStorage.getItem(BIO_CRED_ID_KEY);
     const bioAvailable = !!(bioCredId && window.PublicKeyCredential && window.isSecureContext);
-｝
     
    if (bioAvailable && !isPinLocked()) {
   setPinScreenUI('bio');
