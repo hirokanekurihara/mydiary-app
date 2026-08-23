@@ -605,16 +605,19 @@ function renderEntryList(listEl, rows, showDate) {
       </div>
       ${tagsHtml ? `<div class="tag-badges">${tagsHtml}</div>` : ''}
       <div class="entry-item-actions">
+        <button type="button" class="btn-thought-migrate" data-id="${row.id}">🧠 思考記録へ</button>
         <button type="button" class="btn-racket-migrate" data-id="${row.id}">🎭 ラケット感情へ</button>
       </div>
     `;
     li.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-racket-migrate')) return; // ボタン押下時は詳細を開かない
+      // どちらかのボタン押下時は詳細モーダルを開かない
+      if (e.target.closest('.btn-racket-migrate') || e.target.closest('.btn-thought-migrate')) return;
       openDetailModal(row);
     });
     listEl.appendChild(li);
   });
 }
+
 
 
 /* ---------------------------------------------------------
@@ -1234,18 +1237,20 @@ function initAppOnce() {
   safeInit('initThoughtTab', initThoughtTab);
   safeInit('initVoiceTab', initVoiceTab);
 
-  safeInit('bindRacketMigrateButtons(entry-list)', () =>
+    safeInit('bindRacketMigrateButtons(entry-list)', () =>
     bindRacketMigrateButtons(document.getElementById('entry-list')));
   safeInit('bindRacketMigrateButtons(search-result-list)', () =>
     bindRacketMigrateButtons(document.getElementById('search-result-list')));
 
+  // ★追加：思考記録への移行ボタンも、一覧タブ・検索結果の両方にバインドする
+  safeInit('bindThoughtMigrateButtons(entry-list)', () =>
+    bindThoughtMigrateButtons(document.getElementById('entry-list')));
+  safeInit('bindThoughtMigrateButtons(search-result-list)', () =>
+    bindThoughtMigrateButtons(document.getElementById('search-result-list')));
+
   safeInit('refreshListView', refreshListView);
   safeInit('refreshCalendarView', refreshCalendarView);
 }
-
-
-
-
 
 document.addEventListener('DOMContentLoaded', () => {
   initPinScreen();
@@ -1603,22 +1608,39 @@ async function refreshRacketList() {
 }
 
 
-function bindRacketMigrateButtons(listEl) {
+/* 一覧の「🧠 思考記録へ」ボタン：対象日記の本文を思考記録の⑨出来事欄へ末尾追記する */
+function bindThoughtMigrateButtons(listEl) {
   if (!listEl) return;
   listEl.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.btn-racket-migrate');
+    const btn = e.target.closest('.btn-thought-migrate');
     if (!btn) return;
     e.stopPropagation();
     const id = Number(btn.dataset.id);
     try {
       const entry = await dbGetEntryById(id);
       if (!entry) { showToast('記録が見つかりません'); return; }
-      openRacketTab(entry);
+
+      // その日にすでに思考記録が存在するか確認する
+      const existing = await dbGetThoughtByDate(entry.date);
+      let targetRecord;
+
+      if (existing) {
+        // 既存の出来事欄の末尾に、改行2つを挟んで日記本文を追記する
+        const appended = (existing.event ? existing.event + '\n\n' : '') + (entry.body || '');
+        targetRecord = Object.assign({}, existing, { event: appended });
+      } else {
+        // まだ思考記録がない日は、新規としてその日付・本文をセットする
+        targetRecord = { date: entry.date, event: entry.body || '' };
+      }
+
+      switchView('view-thought');
+      openThoughtForm(targetRecord);
     } catch (err) {
-      showError('移行に失敗しました', err);
+      showError('思考記録への移行に失敗しました', err);
     }
   });
 }
+
 /* ---------------------------------------------------------
  * 16. タブの並び替え
  * --------------------------------------------------------- */
@@ -2388,20 +2410,20 @@ function openVoiceForm(record) {
   document.getElementById('voice-content').value = record ? record.content : '';
 
   if (record) {
-    // ★date/timeが無い（今回の更新より前に書かれた）記録の場合は、
-    //   作成日時(createdAt)から自動的に補完する
     const fallback = record.createdAt ? new Date(record.createdAt) : new Date();
     document.getElementById('voice-date').value = record.date || formatDate(fallback);
     document.getElementById('voice-time').value = record.time || formatTime(fallback);
   } else {
     setVoiceFormDateTime();
-    return; // setVoiceFormDateTime内でupdateVoiceDateDisplayまで実行済み
+    // ★returnを削除。setVoiceFormDateTime内でも日付表示は更新されるが、
+    //   この後のupdateVoiceDateDisplay()が重複実行されても実害はない
   }
   updateVoiceDateDisplay();
 
   document.getElementById('voice-delete').hidden = !record;
-  showVoiceFormView();
+  showVoiceFormView();  // ★常に実行されるようになった
 }
+
 
 
 async function refreshVoiceList() {
@@ -2501,4 +2523,3 @@ function initVoiceTab() {
     }
   });
 }
-
