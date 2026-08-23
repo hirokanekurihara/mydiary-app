@@ -401,19 +401,30 @@ function initTabs() {
 }
 
 function switchView(viewId) {
+  // 対象の画面セクションとタブボタンを、事前に両方取得して存在確認する
+  const targetView = document.getElementById(viewId);
+  const targetTab  = document.querySelector(`.tab-btn[data-view="${viewId}"]`);
+
+  // どちらか一方でも見つからなければ、ここで処理を止めて他のタブへの影響を防ぐ
+  if (!targetView || !targetTab) {
+    console.error('画面またはタブボタンが見つかりません:', viewId, { targetView, targetTab });
+    showToast('この画面を表示できませんでした');
+    return;
+  }
+
+  // 全タブ・全ビューの表示状態をいったんリセット
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active-view'));
   document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-  document.getElementById(viewId).classList.add('active-view');
-  document.querySelector(`.tab-btn[data-view="${viewId}"]`).classList.add('active');
 
+  // 対象だけをアクティブにする
+  targetView.classList.add('active-view');
+  targetTab.classList.add('active');
+
+  // 以降は既存の処理をそのまま残す
   if (viewId === 'view-write') {
-    // タイトル・本文がまだ空の場合のみ、現在時刻に更新する
-    // （過去日付に変更して書きかけの内容がある場合は、上書きしないようにする）
     const titleEmpty = document.getElementById('entry-title').value.trim() === '';
     const bodyEmpty  = document.getElementById('entry-body').value.trim() === '';
-    if (titleEmpty && bodyEmpty) {
-      setEntryFormDateTime();
-    }
+    if (titleEmpty && bodyEmpty) setEntryFormDateTime();
   }
   if (viewId === 'view-list') refreshListView();
   if (viewId === 'view-calendar') refreshCalendarView();
@@ -426,12 +437,12 @@ function switchView(viewId) {
     showThoughtListView();
     refreshThoughtList();
   }
-    if (viewId === 'view-voice') {
+  if (viewId === 'view-voice') {
     showVoiceListView();
     refreshVoiceList();
   }
-
 }
+
 
 
 
@@ -2490,3 +2501,4 @@ function initVoiceTab() {
     }
   });
 }
+
