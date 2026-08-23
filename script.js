@@ -218,7 +218,8 @@ function initPinScreen() {
     pinState.mode = 'verify';
     const bioCredId = localStorage.getItem(BIO_CRED_ID_KEY);
     const bioAvailable = !!(bioCredId && window.PublicKeyCredential && window.isSecureContext);
-
+｝
+    
    if (bioAvailable && !isPinLocked()) {
   setPinScreenUI('bio');
   document.getElementById('pin-message').textContent = 'Face ID / Touch ID で認証しています…';
