@@ -43,9 +43,11 @@ function escapeHtml(str) {
  * 1. IndexedDB ラッパー
  * --------------------------------------------------------- */
 const DB_NAME = 'DiaryDB';
-const DB_VERSION = 2;               // ★ 1 → 2 に変更
+const DB_VERSION = 3;               // ★ 2 → 3 に変更
 const STORE_NAME = 'entries';
-const THOUGHT_STORE = 'thoughts';   // ★ 追加
+const THOUGHT_STORE = 'thoughts';
+const VOICE_STORE = 'voices';       // ★ 追加
+
 
 
 let dbInstance = null;
