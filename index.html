@@ -342,6 +342,54 @@
         </form>
       </div>
     </section>
+    <!-- ---- 心のメモタブ ---- -->
+<section id="view-voice" class="view">
+  <h2 class="view-title">💭 心のメモ</h2>
+
+  <!-- 一覧モード -->
+  <div id="voice-list-view">
+    <button type="button" id="btn-new-voice" class="btn btn-primary btn-block">
+      ＋ 新しい思いを書く
+    </button>
+    <ul id="voice-list" class="voice-entry-list"></ul>
+    <p id="voice-list-empty" class="empty-msg" hidden>まだ記録がありません。</p>
+  </div>
+
+  <!-- 入力・編集モード -->
+  <div id="voice-form-view" hidden>
+    <button type="button" id="voice-back-btn" class="btn btn-secondary voice-back-btn">← 一覧へ戻る</button>
+    <form id="voice-form" class="entry-form">
+  <input type="hidden" id="voice-edit-id">
+
+  <!-- ★追加：書いた日時（デフォルトは現在日時、過去日時にも変更可能） -->
+  <div class="form-row form-row-range">
+    <div>
+      <label for="voice-date">書いた日 <span class="required">必須</span></label>
+      <input type="date" id="voice-date" class="date-input" required>
+    </div>
+    <div>
+      <label for="voice-time">書いた時刻 <span class="required">必須</span></label>
+      <input type="time" id="voice-time" class="time-input" required>
+    </div>
+  </div>
+  <p id="voice-date-display" class="thought-date-display"></p>
+
+  <div class="form-row">
+    <label>思い・悩み・気づき <span class="required">必須</span></label>
+
+        <p class="settings-info">改行するごとに、一覧では箇条書き（・）として表示されます。</p>
+        <textarea id="voice-content" rows="12" required
+          placeholder="今の気持ちや考えを、思いつくまま書いてください。&#10;（Enterキーで改行すると、箇条書きとして表示されます）"></textarea>
+      </div>
+      <div class="voice-form-actions">
+        <button type="button" id="voice-cancel" class="btn btn-secondary btn-half">キャンセル</button>
+        <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
+      </div>
+      <button type="button" id="voice-delete" class="btn btn-danger btn-block btn-voice-delete" hidden>🗑 この記録を削除</button>
+    </form>
+  </div>
+</section>
+
 
     <!-- ---- 設定タブ ---- -->
     <section id="view-settings" class="view">
@@ -404,8 +452,11 @@
     <button type="button" class="tab-btn" data-view="view-racket">
       <span class="tab-icon">🎭</span><span class="tab-label">ラケット</span>
     </button>
-    <button type="button" class="tab-btn" data-view="view-thought">
+    <button type="button" class="tab-btn" data-view="">
       <span class="tab-icon">🧠</span><span class="tab-label">思考記録</span>
+    </button>
+    <button type="button" class="tab-btn" data-view="view-voice">
+    <span class="tab-icon">💭</span><span class="tab-label">心のメモ</span>
     </button>
     <button type="button" class="tab-btn" data-view="view-settings">
       <span class="tab-icon">⚙️</span><span class="tab-label">設定</span>
