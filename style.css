@@ -761,6 +761,19 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   .btn-racket-migrate { background: rgba(74, 124, 111, 0.25); color: #9fd6c4; }
 }
 
+.btn-thought-migrate {
+  background: #eef6f4;
+  color: #2f6f5c;
+  border: 1px solid #bfe0d4;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-right: 6px;
+}
+
+
 /* タブが6つになったので少し詰める */
 .tab-bar .tab-label { font-size: 0.65rem; }
 .tab-bar .tab-icon { font-size: 1.1rem; }
