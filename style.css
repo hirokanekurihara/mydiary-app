@@ -1108,3 +1108,80 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   .ocr-preview-area { background: #1e1e1e; border-color: #444; }
   .ocr-guide { background: rgba(159,214,196,0.1); color: #ccc; }
 }
+/* ===== 心のメモタブ ===== */
+.voice-back-btn { margin-bottom: 1rem; }
+
+.voice-entry-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.voice-entry-item {
+  border-left: 4px solid #e67e22;
+  background: rgba(230, 126, 34, 0.06);
+  border-radius: 10px;
+  padding: 0.8rem 0.9rem;
+  cursor: pointer;
+  transition: transform 0.08s ease;
+}
+.voice-entry-item:active { transform: scale(0.99); }
+
+.voice-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.voice-badge {
+  background: #e67e22;
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.voice-entry-date {
+  font-size: 0.78rem;
+  color: var(--color-text-sub);
+}
+.voice-entry-preview {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+.voice-entry-preview li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-entry-preview li::before {
+  content: '・';
+  color: #e67e22;
+}
+.voice-entry-more {
+  font-size: 0.78rem;
+  color: var(--color-text-sub);
+  margin-top: 0.2rem;
+}
+
+.voice-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+.btn-voice-delete {
+  margin-top: 1rem;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+#voice-content { line-height: 1.7; }
+
+@media (prefers-color-scheme: dark) {
+  .voice-entry-item { background: rgba(230, 126, 34, 0.16); }
+}
