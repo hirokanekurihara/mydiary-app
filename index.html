@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>日記アプリ</title>
+<title>こころラボ</title>
 <link rel="apple-touch-icon" href="dinary icon.png">
 <meta name="theme-color" content="#4a7c6f">
 <link rel="stylesheet" href="style.css?v=9">
@@ -51,7 +51,7 @@
 <div id="app" class="app" hidden>
 
   <header class="app-header">
-    <h1>📔 日記アプリ</h1>
+    <h1>📔 こころラボ</h1>
   </header>
 
   <main class="app-main">
@@ -132,11 +132,13 @@
     <!-- ---- 検索タブ ---- -->
     <section id="view-search" class="view">
       <h2 class="view-title">🔍 検索</h2>
-      <div class="search-target-selector">
+        <div class="search-target-selector">
         <button type="button" class="target-btn active" data-target="diary">📔 日記</button>
         <button type="button" class="target-btn" data-target="thought">🧠 思考記録</button>
         <button type="button" class="target-btn" data-target="racket">🎭 ラケット感情</button>
+        <button type="button" class="target-btn" data-target="voice">💭 心のメモ</button>
       </div>
+
       <div class="search-form">
         <div class="form-row">
           <label for="search-keyword">キーワード</label>
