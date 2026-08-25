@@ -226,7 +226,9 @@
             <p><strong>⑥ 他者肯定</strong><br>他者肯定感がどれくらいだったか。</p>
             <p><strong>⑦ 感情表現（FC）</strong><br>感情（FC）の表出がどれくらいできたか。</p>
             <p><strong>⑧ 気分点数</strong><br>一日の気分点数をー100〜＋100の数値でつけます。普通なら０、最低がー100、最高が＋100です。</p>
-            <p><strong>⑨ 出来事</strong><br>日々の出来事と、その時の心情、Aを意識しどのように客観視できたか（またはできなかったか）、その後どのように思考や言動を適応的なものに修正できたかを記録してください。些細なことでいいので、<strong>自分を褒める文章を毎日、最低１つ以上</strong>書きます。<br><br>例：会社の同僚から頼まれごとをされたが、これまでは自分が忙しくても無理をして請け負っていたが、この時は、Aを上げ客観的に「今は忙しいのでこの後ならばできます」と言えた。<br><br>※上手く行動できなかった場合は、⒈出来事　⒉どのように捉え言動したか　⒊本当はこのように捉え　⒋PACの何を上げこのように言動すべきだったか、を書きます。</p>
+           <p><strong>⑨ 出来事</strong><br>日々の出来事と、その時の心情、Aを意識しどのように客観視できたか（またはできなかったか）、その後どのように思考や言動を適応的なものに修正できたかを記録してください。<br><br>例：会社の同僚から頼まれごとをされたが、これまでは自分が忙しくても無理をして請け負っていたが、この時は、Aを上げ客観的に「今は忙しいのでこの後ならばできます」と言えた。<br><br>※上手く行動できなかった場合は、⒈出来事　⒉どのように捉え言動したか　⒊本当はこのように捉え　⒋PACの何を上げこのように言動すべきだったか、を書きます。</p>
+            <p><strong>⑩ 自分を褒める</strong><br>些細なことでいいので、今日の自分を褒める言葉を最低ひとつ書きましょう。継続することで自己肯定感（⑤）を育てる助けになります。</p>
+
           </div>
         </details>
         <form id="thought-form" class="entry-form">
@@ -331,10 +333,17 @@
             <input type="range" id="thought-mood" min="-100" max="100" step="10" value="0">
             <div id="thought-mood-value" class="thought-mood-value">0</div>
           </div>
-          <div class="form-row">
+            <div class="form-row">
             <label for="thought-event">⑨ 出来事 <span class="required">必須</span></label>
-            <textarea id="thought-event" rows="8" required placeholder="出来事、その時の心情、Aを意識した客観視、自分を褒める言葉を書きましょう。"></textarea>
+            <textarea id="thought-event" rows="8" required placeholder="出来事、その時の心情、Aを意識した客観視を書きましょう。"></textarea>
           </div>
+          <!-- ★ここから追加：⑩ 自分を褒める -->
+          <div class="form-row">
+            <label for="thought-praise">⑩ 自分を褒める</label>
+            <p class="settings-info">些細なことでも構いません。今日の自分を、ひとつ褒めてあげましょう。</p>
+            <textarea id="thought-praise" rows="4" placeholder="例：忙しい中でも「今は難しい」と客観的に言えた自分は偉い。"></textarea>
+          </div>
+          <!-- ★ここまで追加 -->
           <div class="thought-form-actions">
             <button type="button" id="thought-cancel" class="btn btn-secondary btn-half">キャンセル</button>
             <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
