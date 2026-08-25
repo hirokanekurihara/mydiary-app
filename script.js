@@ -751,6 +751,8 @@ function initSearchView() {
     if (target === 'diary')   kw.placeholder = 'タイトル・本文から検索';
     if (target === 'thought') kw.placeholder = '出来事から検索';
     if (target === 'racket')  kw.placeholder = '出来事・考え・感情から検索';
+    if (target === 'voice')   kw.placeholder = '心のメモの内容から検索'; // ★追加
+
 
     document.getElementById('search-result-list').innerHTML = '';
     document.getElementById('search-result-empty').hidden = true;
@@ -870,6 +872,40 @@ function renderSearchRacketCards(listEl, rows) {
   });
 }
 
+/** 心のメモの検索結果を一覧カードとして描画する */
+function renderSearchVoiceCards(listEl, rows) {
+  listEl.innerHTML = '';
+  rows.forEach((row) => {
+    const fallback = row.createdAt ? new Date(row.createdAt) : null;
+    const dateLabel = (row.date && row.time)
+      ? `${formatDateJp(row.date)} ${row.time}`
+      : (fallback ? `${formatDateJp(formatDate(fallback))} ${formatTime(fallback)}` : '（日時不明）');
+
+    const lines = (row.content || '').split('\n').map((l) => l.trim()).filter((l) => l !== '');
+    const previewLines = lines.slice(0, 3);
+    const remaining = lines.length - previewLines.length;
+
+    const li = document.createElement('li');
+    li.className = 'voice-entry-item';
+    li.innerHTML = `
+      <div class="voice-entry-head">
+        <span class="voice-badge">💭 心のメモ</span>
+        <span class="voice-entry-date">${escapeHtml(dateLabel)}</span>
+      </div>
+      <ul class="voice-entry-preview">
+        ${previewLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
+      </ul>
+      ${remaining > 0 ? `<p class="voice-entry-more">…他${remaining}行</p>` : ''}
+    `;
+    li.addEventListener('click', () => {
+      switchView('view-voice');
+      openVoiceForm(row);
+    });
+    listEl.appendChild(li);
+  });
+}
+
+
 async function runSearch() {
   const target   = document.querySelector('.target-btn.active').dataset.target;
   const keyword  = document.getElementById('search-keyword').value.trim().toLowerCase();
@@ -944,16 +980,32 @@ async function runSearch() {
         if (dateTo && row.date > dateTo) return false;
         return true;
       });
-      // ★日記・思考記録と同じく、日毎に並べる（古い日付→新しい日付）
-      filtered.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.seq - b.seq));
-      renderSearchRacketCards(listEl, filtered);
+       } else if (target === 'voice') {
+      avgEl.hidden = true;
+      const all = await dbGetAllVoices();
+      let filtered = all.filter((row) => {
+        if (keyword && !(row.content || '').toLowerCase().includes(keyword)) return false;
+        // date未登録の旧データはcreatedAtから日付を補完してフィルタする
+        const rowDate = row.date || (row.createdAt ? row.createdAt.slice(0, 10) : '');
+        if (dateFrom && rowDate < dateFrom) return false;
+        if (dateTo   && rowDate > dateTo)   return false;
+        return true;
+      });
+      // 日付・時刻の古い順に並べる（他の検索結果・PDF出力と統一）
+      filtered.sort((a, b) => {
+        const aKey = (a.date && a.time) ? `${a.date} ${a.time}` : (a.createdAt || '');
+        const bKey = (b.date && b.time) ? `${b.date} ${b.time}` : (b.createdAt || '');
+        return aKey < bKey ? -1 : 1;
+      });
+
+      renderSearchVoiceCards(listEl, filtered);
       emptyEl.hidden = filtered.length > 0;
       appState.lastSearchResults = filtered;
       pdfBtn.hidden = filtered.length === 0;
     }
   } catch (err) {
     showError('検索に失敗しました', err);
-  }
+     }
 }
 
 
@@ -1821,8 +1873,9 @@ async function registerBiometric() {
     const credential = await navigator.credentials.create({
       publicKey: {
         challenge,
-        rp: { name: '日記アプリ', id: window.location.hostname },
-        user: { id: userId, name: 'diary-user', displayName: '日記アプリ利用者' },
+                rp: { name: 'こころラボ', id: window.location.hostname },
+        user: { id: userId, name: 'diary-user', displayName: 'こころラボ利用者' },
+
         pubKeyCredParams: [
           { alg: -7,   type: 'public-key' }, // ES256
           { alg: -257, type: 'public-key' }  // RS256
@@ -2013,6 +2066,7 @@ async function openThoughtForm(record) {
   document.getElementById('thought-date').value = date;
   updateThoughtDateDisplay();
   document.getElementById('thought-event').value = record ? (record.event || '') : '';
+  document.getElementById('thought-praise').value = record ? (record.praise || '') : ''; // ★追加
 
   if (record) {
     THOUGHT_SCORE_FIELDS.forEach((f) => (thoughtScores[f] = record[f] ?? null));
@@ -2118,6 +2172,7 @@ function initThoughtTab() {
       emotion: thoughtScores.emotion,
       mood: Number(document.getElementById('thought-mood').value),
       event: eventText,
+      praise: document.getElementById('thought-praise').value.trim(), // ★追加
       updatedAt: new Date().toISOString()
     };
 
@@ -2232,7 +2287,11 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
       });
     }
 
-    const targetLabel = target === 'diary' ? '📔 日記' : target === 'thought' ? '🧠 思考記録' : '🎭 ラケット感情';
+        const targetLabel =
+      target === 'diary'   ? '📔 日記' :
+      target === 'thought' ? '🧠 思考記録' :
+      target === 'racket'  ? '🎭 ラケット感情' :
+      target === 'voice'   ? '💭 心のメモ' : '';
     const periodLabel = (dateFrom || dateTo) ? `${dateFrom || '〜'}　〜　${dateTo || '〜'}` : '全期間';
 
     doc.setFontSize(20);
@@ -2301,6 +2360,8 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
         if (scores) writeText(scores, 9);
         writeText('【⑨出来事】', 10);
         writeText(row.event || '', 10);
+        writeText('【⑩自分を褒める】', 10);          // ★追加
+        writeText(row.praise || '（未記入）', 10);   // ★追加
 
       } else if (target === 'racket') {
         writeText(`${row.date}　#${pad2(row.seq)}　${row.title}`, 13);
@@ -2310,6 +2371,17 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
         writeText(row.racket.thought || '（未記入）', 10);
         writeText('【③感情】', 10);
         writeText(row.racket.feeling || '（未記入）', 10);
+         } else if (target === 'voice') {
+        const dateLabel = row.date
+          ? `${formatDateJp(row.date)} ${row.time || ''}`.trim()
+          : (row.createdAt ? `${formatDateJp(formatDate(new Date(row.createdAt)))} ${formatTime(new Date(row.createdAt))}` : '（日時不明）');
+        writeText(dateLabel, 13);
+        const bullets = (row.content || '').split('\n').map((l) => l.trim()).filter(Boolean);
+        if (bullets.length === 0) {
+          writeText('（内容なし）', 10);
+        } else {
+          bullets.forEach((line) => writeText('・' + line, 10, 10));
+        }
       }
     });
 
