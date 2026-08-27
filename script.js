@@ -105,12 +105,18 @@ async function dbGetEntriesByDate(dateStr) {
     const range = IDBKeyRange.only(dateStr);
     const req = idx.getAll(range);
     req.onsuccess = () => {
-      const rows = (req.result || []).sort((a, b) => a.seq - b.seq);
+      // ★修正：seq(保存順)ではなく、time(時刻)の古い順に並び替える
+      //   同時刻の記録が複数ある場合のみseqで安定ソートする
+      const rows = (req.result || []).sort((a, b) => {
+        if (a.time !== b.time) return a.time < b.time ? -1 : 1;
+        return (a.seq || 0) - (b.seq || 0);
+      });
       resolve(rows);
     };
     req.onerror = () => reject(req.error);
   });
 }
+
 
 async function dbGetMaxSeqForDate(dateStr) {
   const rows = await dbGetEntriesByDate(dateStr);
@@ -938,7 +944,12 @@ async function runSearch() {
         }
         return true;
       });
-      filtered.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.seq - b.seq));
+            // ★修正：日付順 → 同日内は時刻の古い順 に統一
+      filtered.sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        if (a.time !== b.time) return a.time < b.time ? -1 : 1;
+        return (a.seq || 0) - (b.seq || 0);
+      });
       renderEntryList(listEl, filtered, true);
       emptyEl.hidden = filtered.length > 0;
       appState.lastSearchResults = filtered;
@@ -967,20 +978,32 @@ async function runSearch() {
         avgEl.hidden = true;
       }
 
-    } else if (target === 'racket') {
-      avgEl.hidden = true;
-      const all = await dbGetAllEntries();
-      let filtered = all.filter((row) => {
-        if (!row.racket || (!row.racket.event && !row.racket.thought && !row.racket.feeling)) return false;
-        if (keyword) {
-          const r = row.racket;
-          if (![r.event, r.thought, r.feeling].some((t) => (t || '').toLowerCase().includes(keyword))) return false;
-        }
-        if (dateFrom && row.date < dateFrom) return false;
-        if (dateTo && row.date > dateTo) return false;
-        return true;
-      });
-       } else if (target === 'voice') {
+   } else if (target === 'racket') {
+  avgEl.hidden = true;
+  const all = await dbGetAllEntries();
+  let filtered = all.filter((row) => {
+    if (!row.racket || (!row.racket.event && !row.racket.thought && !row.racket.feeling)) return false;
+    if (keyword) {
+      const r = row.racket;
+      if (![r.event, r.thought, r.feeling].some((t) => (t || '').toLowerCase().includes(keyword))) return false;
+    }
+    if (dateFrom && row.date < dateFrom) return false;
+    if (dateTo && row.date > dateTo) return false;
+    return true;
+  });
+  // ★復元：日付順 → 同日内は時刻の古い順（日記の検索結果と統一）
+  filtered.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.time !== b.time) return a.time < b.time ? -1 : 1;
+    return (a.seq || 0) - (b.seq || 0);
+  });
+  // ★復元：画面への描画と状態更新
+  renderSearchRacketCards(listEl, filtered);
+  emptyEl.hidden = filtered.length > 0;
+  appState.lastSearchResults = filtered;
+  pdfBtn.hidden = filtered.length === 0;
+
+} else if (target === 'voice') {
       avgEl.hidden = true;
       const all = await dbGetAllVoices();
       let filtered = all.filter((row) => {
@@ -2184,60 +2207,9 @@ function initThoughtTab() {
     } catch (err) { showError('保存に失敗しました', err); }
   });
 }
-/* ---------------------------------------------------------
- * 19. OCR補助機能（カメラ画像プレビュー＋クリップボード貼り付け）
- * --------------------------------------------------------- */
-function initOcrHelper() {
-  const fileInput   = document.getElementById('ocr-file-input');
-  const previewArea = document.getElementById('ocr-preview-area');
-  const previewImg  = document.getElementById('ocr-preview-img');
-  const textarea    = document.getElementById('thought-event');
-
-  document.getElementById('btn-ocr-camera').addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      previewImg.src = ev.target.result;
-      previewArea.hidden = false;
-      previewArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-    reader.readAsDataURL(file);
-  });
-
-  document.getElementById('btn-ocr-close').addEventListener('click', () => {
-    previewImg.src = '';
-    previewArea.hidden = true;
-  });
-
-  document.getElementById('btn-ocr-paste').addEventListener('click', async () => {
-    try {
-      if (!navigator.clipboard || !navigator.clipboard.readText) {
-        showToast('この端末では自動貼り付けに対応していません。テキストエリアを長押しして「ペースト」を選んでください');
-        return;
-      }
-      const text = await navigator.clipboard.readText();
-      if (!text) { showToast('クリップボードにテキストがありません'); return; }
-
-      const start = textarea.selectionStart;
-      const end   = textarea.selectionEnd;
-      textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(end);
-      const pos = start + text.length;
-      textarea.setSelectionRange(pos, pos);
-      textarea.focus();
-      showToast(`${text.length}文字を貼り付けました ✅`);
-    } catch (err) {
-      console.error('クリップボード読み取りエラー', err);
-      showToast('クリップボードへのアクセスが許可されていません。テキストエリアを長押しして「ペースト」を選んでください');
-    }
-  });
-}
 
 /* ---------------------------------------------------------
- * 20. 検索結果のPDF出力
+ * 19. 検索結果のPDF出力
  * --------------------------------------------------------- */
 async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
   if (!rows || rows.length === 0) { showToast('出力する検索結果がありません'); return; }
