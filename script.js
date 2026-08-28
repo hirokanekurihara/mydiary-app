@@ -461,19 +461,19 @@ function switchView(viewId) {
 /* ---------------------------------------------------------
  * 5. 「書く」フォーム
  * --------------------------------------------------------- */
-/** 「書く」フォームの日時欄に現在の日時をセットし、年月日表示も更新する */
+/** 「書く」フォームの日時欄に現在の日時をセットする */
 function setEntryFormDateTime() {
   const now = new Date();
   document.getElementById('entry-date').value = formatDate(now);
   document.getElementById('entry-time').value = formatTime(now);
+  // ★entry-date-displayは削除済みのため、ここでは何もしない
 }
-
 
 function initWriteForm() {
   // フォーム初期化時に現在の日時をデフォルトでセットする
   setEntryFormDateTime();
 
- 
+  // ★entry-date-displayは削除済みのため、日付変更時のリスナーも不要
 
   document.getElementById('mood-picker').addEventListener('click', (e) => {
     const btn = e.target.closest('.mood-btn');
@@ -497,7 +497,6 @@ function initWriteForm() {
     await handleSaveEntry();
   });
 }
-
 
 function renderMoodPicker() {
   document.querySelectorAll('#mood-picker .mood-btn').forEach((btn) => {
@@ -527,7 +526,6 @@ async function handleSaveEntry() {
   if (!title || !body) { showToast('タイトルと本文を入力してください'); return; }
 
   try {
-    // 入力された日付を基準に、その日の最大通し番号を取得して+1する
     const maxSeq = await dbGetMaxSeqForDate(date);
     const seq = maxSeq + 1;
 
@@ -540,7 +538,6 @@ async function handleSaveEntry() {
 
     await dbAddEntry(entry);
 
-    // フォームクリア
     titleEl.value = '';
     bodyEl.value = '';
     appState.selectedMood = null;
@@ -548,7 +545,6 @@ async function handleSaveEntry() {
     renderMoodPicker();
     renderTagChips('tag-chips-input', appState.selectedTagsInput);
 
-    // 保存後は日時欄を「今」にリセットする（次の新規入力に備える）
     setEntryFormDateTime();
 
     showToast('保存しました ✅');
@@ -559,6 +555,7 @@ async function handleSaveEntry() {
     showError('保存に失敗しました', err);
   }
 }
+
 
 
 /* ---------------------------------------------------------
@@ -1696,6 +1693,7 @@ function bindRacketMigrateButtons(listEl) {
     }
   });
 }
+
 
 /* 一覧の「🧠 思考記録へ」ボタン：対象日記の本文を思考記録の⑨出来事欄へ末尾追記する */
 function bindThoughtMigrateButtons(listEl) {
