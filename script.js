@@ -466,13 +466,6 @@ function setEntryFormDateTime() {
   const now = new Date();
   document.getElementById('entry-date').value = formatDate(now);
   document.getElementById('entry-time').value = formatTime(now);
-  updateEntryDateDisplay();
-}
-
-/** 日付入力欄の下に、日本語の年月日表示を更新する（formatDateJpは思考記録タブで定義済みの関数を再利用） */
-function updateEntryDateDisplay() {
-  const val = document.getElementById('entry-date').value;
-  document.getElementById('entry-date-display').textContent = formatDateJp(val);
 }
 
 
@@ -480,8 +473,7 @@ function initWriteForm() {
   // フォーム初期化時に現在の日時をデフォルトでセットする
   setEntryFormDateTime();
 
-  // 日付を変更したら、下の年月日表示もリアルタイムで更新する
-  document.getElementById('entry-date').addEventListener('change', updateEntryDateDisplay);
+ 
 
   document.getElementById('mood-picker').addEventListener('click', (e) => {
     const btn = e.target.closest('.mood-btn');
@@ -1688,6 +1680,22 @@ async function refreshRacketList() {
   }
 }
 
+function bindRacketMigrateButtons(listEl) {
+  if (!listEl) return;
+  listEl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-racket-migrate');
+    if (!btn) return;
+    e.stopPropagation();
+    const id = Number(btn.dataset.id);
+    try {
+      const entry = await dbGetEntryById(id);
+      if (!entry) { showToast('記録が見つかりません'); return; }
+      openRacketTab(entry);
+    } catch (err) {
+      showError('移行に失敗しました', err);
+    }
+  });
+}
 
 /* 一覧の「🧠 思考記録へ」ボタン：対象日記の本文を思考記録の⑨出来事欄へ末尾追記する */
 function bindThoughtMigrateButtons(listEl) {
