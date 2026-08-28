@@ -426,6 +426,12 @@ function switchView(viewId) {
   targetView.classList.add('active-view');
   targetTab.classList.add('active');
 
+  // ★追加：タブ切替時に、ウィンドウ・メインコンテンツ領域の両方を最上部へリセットする
+  //   （どちらが実際のスクロール領域かに関わらず両方リセットすることで確実に効かせる）
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  const mainEl = document.querySelector('.app-main');
+  if (mainEl) mainEl.scrollTop = 0;
+
   // 以降は既存の処理をそのまま残す
   if (viewId === 'view-write') {
     const titleEmpty = document.getElementById('entry-title').value.trim() === '';
