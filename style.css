@@ -276,8 +276,22 @@ h1, h2, h3 { margin: 0; }
 .form-row-range {
   display: flex;
   gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
 }
-.form-row-range > div { flex: 1; }
+
+.form-row-range > div {
+  flex: 1 1 0;
+  min-width: 0; /* ★これが無いと、iPhoneのSafariで日付・時刻入力欄が親の幅を突き破ってしまう */
+}
+
+.form-row-range input[type="date"],
+.form-row-range input[type="time"] {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 
 input[type="text"],
 input[type="date"],
