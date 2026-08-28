@@ -1212,3 +1212,33 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 @media (prefers-color-scheme: dark) {
   .voice-entry-item { background: rgba(230, 126, 34, 0.16); }
 }
+/* ===== 日付・時刻欄の重なり・はみ出しを、優先順位に関係なく強制的に解消する ===== */
+
+.form-row-range {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.form-row-range > div {
+  flex: none !important;
+  width: calc(50% - 4px) !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* クラス名指定・属性セレクタ指定の両方を重ねがけし、
+   どちらが実際にHTML側に付いていても確実に効かせる */
+.form-row-range .date-input,
+.form-row-range .time-input,
+.form-row-range input[type="date"],
+.form-row-range input[type="time"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  padding: 8px 4px !important;
+  font-size: 14px !important;
+}
