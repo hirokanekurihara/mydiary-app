@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>こころラボ</title>
-<link rel="apple-touch-icon" href="kokoro-labo-icon.jpeg?v=15">
+<link rel="apple-touch-icon" href="kokoro-labo-icon.jpeg?v=16">
 <meta name="theme-color" content="#4a7c6f">
-<link rel="stylesheet" href="style.css?v=15">
-<link rel="icon" href="kokoro-labo-icon.jpeg?v=15">
+<link rel="stylesheet" href="style.css?v=16">
+<link rel="icon" href="kokoro-labo-icon.jpeg?v=16">
 <!-- jsPDF (PDF出力用) -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 </head>
@@ -168,7 +168,7 @@
       </div>
 
       <div id="search-thought-averages" class="thought-averages-card" hidden>
-        <h3>📊 検索期間の平均スコア（<span id="avg-count">0</span>件）</h3>
+          <h3>📊 検索期間の平均スコア（<span id="avg-count">0</span>日分）</h3>
         <div class="averages-grid" id="averages-grid"></div>
         <p class="averages-note">※未記入の項目は平均の計算から除外しています</p>
       </div>
@@ -211,8 +211,12 @@
     <!-- ---- 思考記録タブ ---- -->
     <section id="view-thought" class="view">
       <h2 class="view-title">🧠 思考記録</h2>
+            <div class="thought-mode-selector">
+        <button type="button" id="btn-thought-mode-daily" class="thought-mode-btn active">日々の記録</button>
+        <button type="button" id="btn-thought-mode-period" class="thought-mode-btn">期間分析</button>
+      </div>
       <div id="thought-list-view">
-        <button type="button" id="btn-new-thought" class="btn btn-primary btn-block">＋ 今日の思考記録を書く</button>
+        <button type="button" id="btn-new-thought" class="btn btn-primary btn-block">＋ 思考記録を書く（1日3件まで）</button>
         <ul id="thought-list" class="thought-entry-list"></ul>
         <p id="thought-list-empty" class="empty-msg" hidden>まだ思考記録がありません。</p>
       </div>
@@ -235,8 +239,11 @@
         </details>
         <form id="thought-form" class="entry-form">
           <input type="hidden" id="thought-edit-date">
+                    <input type="hidden" id="thought-edit-seq">
+
           <div class="form-row">
-            <label for="thought-date">① 日付</label>
+          <label for="thought-date">① 日付 <span id="thought-seq-badge" class="seq-badge"></span></label>
+
             <input type="date" id="thought-date" class="date-input" required>
             <p id="thought-date-display" class="thought-date-display"></p>
           </div>
@@ -335,23 +342,127 @@
             <input type="range" id="thought-mood" min="-100" max="100" step="10" value="0">
             <div id="thought-mood-value" class="thought-mood-value">0</div>
           </div>
+                      <!-- 出来事1（必須） -->
+          <div class="episode-box" id="episode-box-1">
+            <div class="episode-head"><span class="episode-title">【出来事 1】</span></div>
             <div class="form-row">
-            <label for="thought-event">⑨ 出来事 <span class="required">必須</span></label>
-            <textarea id="thought-event" rows="8" required placeholder="出来事、その時の心情、Aを意識した客観視を書きましょう。"></textarea>
+              <label for="thought-event-1">⑨ 出来事 <span class="required">必須</span></label>
+              <textarea id="thought-event-1" rows="5" required placeholder="出来事、その時の心情、Aを意識した客観視を書きましょう。"></textarea>
+            </div>
+            <div class="form-row">
+              <label for="thought-praise-1">⑩ 自分を褒める</label>
+              <textarea id="thought-praise-1" rows="3" placeholder="例：忙しい中でも「今は難しい」と客観的に言えた自分は偉い。"></textarea>
+            </div>
           </div>
-          <!-- ★ここから追加：⑩ 自分を褒める -->
-          <div class="form-row">
-            <label for="thought-praise">⑩ 自分を褒める</label>
-            <p class="settings-info">些細なことでも構いません。今日の自分を、ひとつ褒めてあげましょう。</p>
-            <textarea id="thought-praise" rows="4" placeholder="例：忙しい中でも「今は難しい」と客観的に言えた自分は偉い。"></textarea>
+
+          <!-- 出来事2（任意） -->
+          <div class="episode-box" id="episode-box-2" hidden>
+            <div class="episode-head">
+              <span class="episode-title">【出来事 2】</span>
+              <button type="button" class="btn-remove-episode" data-target="2">✕ 削除</button>
+            </div>
+            <div class="form-row">
+              <label for="thought-event-2">⑨ 出来事</label>
+              <textarea id="thought-event-2" rows="5" placeholder="別の場面での出来事があれば記入してください。"></textarea>
+            </div>
+            <div class="form-row">
+              <label for="thought-praise-2">⑩ 自分を褒める</label>
+              <textarea id="thought-praise-2" rows="3"></textarea>
+            </div>
           </div>
-          <!-- ★ここまで追加 -->
+
+          <!-- 出来事3（任意） -->
+          <div class="episode-box" id="episode-box-3" hidden>
+            <div class="episode-head">
+              <span class="episode-title">【出来事 3】</span>
+              <button type="button" class="btn-remove-episode" data-target="3">✕ 削除</button>
+            </div>
+            <div class="form-row">
+              <label for="thought-event-3">⑨ 出来事</label>
+              <textarea id="thought-event-3" rows="5" placeholder="3つ目の出来事があれば記入してください。"></textarea>
+            </div>
+            <div class="form-row">
+              <label for="thought-praise-3">⑩ 自分を褒める</label>
+              <textarea id="thought-praise-3" rows="3"></textarea>
+            </div>
+          </div>
+
+          <div class="episode-add-container">
+            <button type="button" id="btn-add-episode" class="btn btn-secondary btn-block">＋ 出来事・自分褒めを追加する（最大3組）</button>
+          </div>
+
           <div class="thought-form-actions">
             <button type="button" id="thought-cancel" class="btn btn-secondary btn-half">キャンセル</button>
             <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
           </div>
         </form>
       </div>
+            <!-- ===== 期間分析エリア ===== -->
+      <div id="thought-period-container" hidden>
+        <div id="period-list-view">
+          <button type="button" id="btn-new-period-analysis" class="btn btn-primary btn-block">＋ 期間を指定して分析する</button>
+          <ul id="period-analysis-list" class="period-entry-list"></ul>
+          <p id="period-analysis-empty" class="empty-msg" hidden>まだ期間分析の記録がありません。</p>
+        </div>
+
+        <div id="period-form-view" hidden>
+          <button type="button" id="period-back-btn" class="btn btn-secondary thought-back-btn">← 一覧へ戻る</button>
+          <form id="period-analysis-form" class="entry-form">
+            <input type="hidden" id="period-edit-id">
+
+            <div class="form-row form-row-range">
+              <div>
+                <label for="period-date-from">開始日 <span class="required">必須</span></label>
+                <input type="date" id="period-date-from" class="date-input" required>
+              </div>
+              <div>
+                <label for="period-date-to">終了日 <span class="required">必須</span></label>
+                <input type="date" id="period-date-to" class="date-input" required>
+              </div>
+            </div>
+
+            <p id="period-record-count-msg" class="settings-info">対象の思考記録：<strong>0件</strong></p>
+
+            <details class="thought-guide period-ref-accordion">
+              <summary>📊 この期間の平均スコアを見る（タップで開閉）</summary>
+              <div class="thought-guide-content">
+                <div class="averages-grid" id="period-averages-grid"></div>
+                <p class="averages-note">※小数点以下は四捨五入／未記入の項目は計算から除外</p>
+              </div>
+            </details>
+
+            <details class="thought-guide period-ref-accordion">
+              <summary>📖 この期間の思考記録を読む（タップで開閉）</summary>
+              <div class="thought-guide-content">
+                <div id="period-reference-records" class="period-ref-records-box"></div>
+              </div>
+            </details>
+
+            <div class="form-row">
+              <label for="period-common">① 共通点（状況と要素）</label>
+              <p class="settings-info">繰り返し出てきた状況・相手・時間帯・きっかけをまとめます。</p>
+              <textarea id="period-common" rows="6"></textarea>
+            </div>
+            <div class="form-row">
+              <label for="period-insight">② 気づき（心理的側面）</label>
+              <p class="settings-info">そのときの考え・感情・思い込み、PACやAの動きへの気づきを書きます。</p>
+              <textarea id="period-insight" rows="6"></textarea>
+            </div>
+            <div class="form-row">
+              <label for="period-action">③ 反省・改善策（具体的な改善と対策）</label>
+              <p class="settings-info">次に同じ場面が来たらどう動くかを、行動の形で書きます（「気をつける」で終わらせない）。</p>
+              <textarea id="period-action" rows="6"></textarea>
+            </div>
+
+            <div class="thought-form-actions">
+              <button type="button" id="period-cancel" class="btn btn-secondary btn-half">キャンセル</button>
+              <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
+            </div>
+            <button type="button" id="period-delete" class="btn btn-danger btn-block btn-voice-delete" hidden>🗑 この分析を削除</button>
+          </form>
+        </div>
+      </div>
+
     </section>
 
     <!-- ---- 心のメモタブ ---- -->
@@ -536,6 +647,6 @@
 <!-- ============ トースト通知 ============ -->
 <div id="toast" class="toast" hidden></div>
 
-<script src="script.js?v=15"></script>
+<script src="script.js?v=16"></script>
 </body>
 </html>
