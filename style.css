@@ -1351,3 +1351,53 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   .thought-mode-btn.active { background: #3a3a3a; color: #9fd6c4; }
   .period-entry-item { background: rgba(22, 160, 133, 0.16); }
 }
+/* ===== 思考記録：出来事（最大3組）の入力ボックス ===== */
+.episode-box {
+  background: rgba(74, 124, 111, 0.04);
+  border: 1px solid rgba(74, 124, 111, 0.2);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.episode-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+.episode-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+.btn-remove-episode {
+  background: none;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.episode-add-container { margin-bottom: 1.2rem; }
+.episode-count-badge {
+  background: #2980b9;
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.period-ref-ep-item {
+  border-top: 1px dashed var(--color-border);
+  padding-top: 0.4rem;
+  margin-top: 0.4rem;
+}
+.period-ref-ep-item:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .episode-box { background: rgba(159, 214, 196, 0.08); border-color: rgba(159, 214, 196, 0.2); }
+}
