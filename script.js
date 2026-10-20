@@ -1261,6 +1261,26 @@ async function doBackup() {
   }
 }
 
+/** 前回のバックアップ日時と、バックアップ推奨メッセージを表示する */
+function refreshBackupInfo() {
+  const infoEl = document.getElementById('last-backup-info');
+  const warnEl = document.getElementById('backup-warning');
+  if (!infoEl || !warnEl) return;
+  const lastIso = localStorage.getItem(LAST_BACKUP_KEY);
+  if (!lastIso) {
+    infoEl.textContent = '前回バックアップ：まだありません';
+    warnEl.hidden = false;
+    return;
+  }
+  const d = new Date(lastIso);
+  const label = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  infoEl.textContent = `前回バックアップ：${label}`;
+
+  const diffDays = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
+  warnEl.hidden = diffDays < 7;
+}
+
+
 async function handleImportFile(e) {
   const file = e.target.files[0];
   e.target.value = '';
