@@ -43,11 +43,11 @@ function escapeHtml(str) {
  * 1. IndexedDB ラッパー
  * --------------------------------------------------------- */
 const DB_NAME = 'DiaryDB';
-const DB_VERSION = 3;               // ★ 2 → 3 に変更
+const DB_VERSION = 4;                       // ★ 3 → 4
 const STORE_NAME = 'entries';
-const THOUGHT_STORE = 'thoughts';
-const VOICE_STORE = 'voices';       // ★ 追加
-
+const THOUGHT_STORE = 'thoughts';           // 1日1件（日付が主キー）。出来事は episodes 配列で持つ
+const VOICE_STORE = 'voices';
+const PERIOD_STORE = 'period_analyses';     // ★ 期間分析の保管庫
 
 let dbInstance = null;
 
@@ -63,20 +63,26 @@ function openDB() {
         store.createIndex('by_date', 'date', { unique: false });
         store.createIndex('by_date_seq', ['date', 'seq'], { unique: true });
       }
-      // ★思考記録用ストア：dateを主キーにすることで「一日一件」を自動保証する
-if (!db.objectStoreNames.contains(THOUGHT_STORE)) {
-  db.createObjectStore(THOUGHT_STORE, { keyPath: 'date' });
-}
-      // ★心のメモ用ストア（idの自動連番を主キーにする）
+      if (!db.objectStoreNames.contains(THOUGHT_STORE)) {
+        db.createObjectStore(THOUGHT_STORE, { keyPath: 'date' });
+      }
       if (!db.objectStoreNames.contains(VOICE_STORE)) {
         db.createObjectStore(VOICE_STORE, { keyPath: 'id', autoIncrement: true });
       }
-
-};
+      // ★期間分析ストア
+      if (!db.objectStoreNames.contains(PERIOD_STORE)) {
+        db.createObjectStore(PERIOD_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+    };
 
     req.onsuccess = (event) => {
       dbInstance = event.target.result;
+      dbInstance.onversionchange = () => { dbInstance.close(); dbInstance = null; };
       resolve(dbInstance);
+    };
+
+    req.onblocked = () => {
+      console.error('DBの更新が、開いている別のタブにブロックされています');
     };
 
     req.onerror = (event) => {
@@ -84,6 +90,8 @@ if (!db.objectStoreNames.contains(THOUGHT_STORE)) {
     };
   });
 }
+
+
 
 async function dbGetAllEntries() {
   const db = await openDB();
@@ -464,10 +472,11 @@ function switchView(viewId) {
     document.getElementById('racket-list-view').hidden = false;
     refreshRacketList();
   }
-  if (viewId === 'view-thought') {
-    showThoughtListView();
-    refreshThoughtList();
+    if (viewId === 'view-thought') {
+    setThoughtMode('daily');
   }
+
+
   if (viewId === 'view-voice') {
     showVoiceListView();
     refreshVoiceList();
@@ -792,33 +801,50 @@ function initSearchView() {
 
 
 
-/** 思考記録の平均スコアを計算し、パネルに描画する */
-function renderThoughtAverages(rows) {
-  const fields = [
-    { key: 'pac',            label: '② PAC（自他肯定の構え）' },
-    { key: 'parallelFamily', label: '③ 平行交流：家族（配偶者）' },
-    { key: 'parallelOther',  label: '③ 平行交流：他者' },
-    { key: 'objectivity',    label: '④ 客観性（A）' },
-    { key: 'selfAffirm',     label: '⑤ 自己肯定' },
-    { key: 'otherAffirm',    label: '⑥ 他者肯定' },
-    { key: 'emotion',        label: '⑦ 感情表現（FC）' },
-    { key: 'mood',           label: '⑧ 気分点数（ー100〜＋100）' }
-  ];
+/** 平均スコアの対象項目（検索・期間分析・PDFで共用） */
+const THOUGHT_AVG_FIELDS = [
+  { key: 'pac',            label: '② PAC（自他肯定の構え）' },
+  { key: 'parallelFamily', label: '③ 平行交流：家族（配偶者）' },
+  { key: 'parallelOther',  label: '③ 平行交流：他者' },
+  { key: 'objectivity',    label: '④ 客観性（A）' },
+  { key: 'selfAffirm',     label: '⑤ 自己肯定' },
+  { key: 'otherAffirm',    label: '⑥ 他者肯定' },
+  { key: 'emotion',        label: '⑦ 感情表現（FC）' },
+  { key: 'mood',           label: '⑧ 気分点数（ー100〜＋100）' }
+];
 
-  const gridEl = document.getElementById('averages-grid');
+/** 四捨五入（0.5は絶対値が大きい側へ。-12.5 → -13、-0 は 0 にする） */
+function roundHalfAway(n) {
+  return (Math.sign(n) * Math.round(Math.abs(n))) || 0;
+}
+
+/**
+ * 指定項目の平均を計算する（rows は「1日1件」の配列なので、日単位の平均になる）。
+ * 未記入の日は除外。値が1つも無ければ null
+ */
+function calcThoughtAverage(rows, key) {
+  const vals = rows.map((r) => r[key]).filter((v) => v != null);
+  if (vals.length === 0) return null;
+  const avg = vals.reduce((s, v) => s + Number(v), 0) / vals.length;
+  return { value: roundHalfAway(avg), count: vals.length };
+}
+
+function formatThoughtAverage(key, value) {
+  if (key === 'mood') return value > 0 ? `+${value}` : String(value);
+  return `${value} / 10`;
+}
+
+/** 平均スコアのカード群を、指定の入れ物に描画する */
+function renderAverageItems(gridEl, rows) {
   gridEl.innerHTML = '';
-
-  fields.forEach(({ key, label }) => {
-    const validValues = rows.map((r) => r[key]).filter((v) => v != null);
+  THOUGHT_AVG_FIELDS.forEach(({ key, label }) => {
+    const avg = calcThoughtAverage(rows, key);
     let displayVal = '−';
     let moodClass = '';
-    if (validValues.length > 0) {
-      const avg = validValues.reduce((sum, v) => sum + Number(v), 0) / validValues.length;
+    if (avg) {
+      displayVal = formatThoughtAverage(key, avg.value);
       if (key === 'mood') {
-        displayVal = avg > 0 ? `+${avg.toFixed(1)}` : avg.toFixed(1);
-        moodClass = avg > 0 ? 'mood-positive' : avg < 0 ? 'mood-negative' : 'mood-neutral';
-      } else {
-        displayVal = `${avg.toFixed(1)} / 10`;
+        moodClass = avg.value > 0 ? 'mood-positive' : avg.value < 0 ? 'mood-negative' : 'mood-neutral';
       }
     }
     const item = document.createElement('div');
@@ -826,9 +852,14 @@ function renderThoughtAverages(rows) {
     item.innerHTML = `<span class="avg-item-label">${escapeHtml(label)}</span><span class="avg-item-value ${moodClass}">${escapeHtml(displayVal)}</span>`;
     gridEl.appendChild(item);
   });
+}
 
+/** 思考記録の平均スコアを、検索画面のパネルに描画する */
+function renderThoughtAverages(rows) {
+  renderAverageItems(document.getElementById('averages-grid'), rows);
   document.getElementById('avg-count').textContent = String(rows.length);
 }
+
 
 
 /** 思考記録の検索結果を一覧カードとして描画する */
@@ -836,18 +867,16 @@ function renderSearchThoughtCards(listEl, rows) {
   listEl.innerHTML = '';
   rows.forEach((row) => {
     const preview = (row.event || '').replace(/\n/g, ' ');
- const scoreText = [
-  row.pac            != null ? `②PAC：${row.pac}` : '',
-  row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
-  row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
-  row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
-  row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
-  row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
-  row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
-  row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
-].filter(Boolean).join('　');
-
-
+    const scoreText = [
+      row.pac            != null ? `②PAC：${row.pac}` : '',
+      row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
+      row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
+      row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
+      row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
+      row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
+      row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
+      row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
+    ].filter(Boolean).join('　');
 
     const li = document.createElement('li');
     li.className = 'thought-entry-item';
@@ -859,10 +888,15 @@ function renderSearchThoughtCards(listEl, rows) {
       <div class="thought-entry-scores">${escapeHtml(scoreText)}</div>
       <div class="thought-entry-preview">${escapeHtml(preview)}</div>
     `;
-    li.addEventListener('click', () => openThoughtForm(row));
+    li.addEventListener('click', () => {
+      switchView('view-thought');   // 先に思考記録タブへ移動する
+      openThoughtForm(row);
+    });
+
     listEl.appendChild(li);
   });
 }
+
 
 /** ラケット感情の検索結果を一覧カードとして描画する（①②③の内容を表示） */
 function renderSearchRacketCards(listEl, rows) {
@@ -978,7 +1012,7 @@ async function runSearch() {
         return true;
       });
       // ★日毎に並べる（古い日付→新しい日付）
-      filtered.sort((a, b) => (a.date < b.date ? -1 : 1));
+            filtered.sort((a, b) => (a.date < b.date ? -1 : 1));
 
       renderSearchThoughtCards(listEl, filtered);
       emptyEl.hidden = filtered.length > 0;
@@ -1194,18 +1228,18 @@ async function doBackup() {
   try {
     const entries = await dbGetAllEntries();
     const nowIso = new Date().toISOString();
-        const thoughts = await dbGetAllThoughts();
-    const voices = await dbGetAllVoices();       // ★ 追加
+    const thoughts = await dbGetAllThoughts();
+    const voices = await dbGetAllVoices();
+    const periodAnalyses = await dbGetAllPeriodAnalyses();   // ★追加
     const payload = {
       version: 1,
       exportedAt: nowIso,
       entries,
       customTags,
       thoughts,
-      voices    // ★ 追加
+      voices,
+      periodAnalyses                                          // ★追加
     };
-
-
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1225,23 +1259,6 @@ async function doBackup() {
   } catch (err) {
     showError('バックアップに失敗しました', err);
   }
-}
-
-function refreshBackupInfo() {
-  const infoEl = document.getElementById('last-backup-info');
-  const warnEl = document.getElementById('backup-warning');
-  const lastIso = localStorage.getItem(LAST_BACKUP_KEY);
-  if (!lastIso) {
-    infoEl.textContent = '前回バックアップ：まだありません';
-    warnEl.hidden = false;
-    return;
-  }
-  const d = new Date(lastIso);
-  const label = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  infoEl.textContent = `前回バックアップ：${label}`;
-
-  const diffDays = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
-  warnEl.hidden = diffDays < 7;
 }
 
 async function handleImportFile(e) {
@@ -1268,11 +1285,12 @@ async function handleImportFile(e) {
     await dbClearAll();
     await dbBulkAdd(json.entries);
 
-    // 思考記録と心のメモも、復元する前に古いデータを消す
-    if (Array.isArray(json.thoughts)) await dbClearStore(THOUGHT_STORE);
-    if (Array.isArray(json.voices))   await dbClearStore(VOICE_STORE);
+    // バックアップに含まれているストアだけ、復元前に全消去する
+    if (Array.isArray(json.thoughts))       await dbClearStore(THOUGHT_STORE);
+    if (Array.isArray(json.voices))         await dbClearStore(VOICE_STORE);
+    if (Array.isArray(json.periodAnalyses)) await dbClearStore(PERIOD_STORE);
 
-    // ②カスタムタグがあれば復元（★tryブロックの中に移動）
+    // ②カスタムタグ
     if (Array.isArray(json.customTags)) {
       customTags = json.customTags;
       saveCustomTags();
@@ -1280,14 +1298,16 @@ async function handleImportFile(e) {
       renderAllTagChipContainers();
     }
 
-    // ③思考記録があれば復元（★tryブロックの中に移動）
+    // ③思考記録・心のメモ・期間分析
     if (Array.isArray(json.thoughts)) {
-      await dbBulkAddThoughts(json.thoughts);
+      await dbBulkAddThoughts(json.thoughts);   // seq が無い旧バックアップは #1 として復元
     }
-        if (Array.isArray(json.voices)) {
+    if (Array.isArray(json.voices)) {
       await dbBulkAddVoices(json.voices);
     }
-
+    if (Array.isArray(json.periodAnalyses)) {
+      await dbBulkAddPeriodAnalyses(json.periodAnalyses);
+    }
 
     showToast('復元が完了しました ✅');
     await refreshListView();
@@ -1298,6 +1318,7 @@ async function handleImportFile(e) {
     showError('インポートに失敗しました。ファイル形式を確認してください', err);
   }
 }
+
 
 
 /* ---------------------------------------------------------
@@ -1718,7 +1739,7 @@ function bindRacketMigrateButtons(listEl) {
 }
 
 
-/* 一覧の「🧠 思考記録へ」ボタン：対象日記の本文を思考記録の⑨出来事欄へ末尾追記する */
+/* 一覧の「🧠 思考記録へ」ボタン：日記本文を「新しい出来事」としてその日の思考記録へ渡す */
 function bindThoughtMigrateButtons(listEl) {
   if (!listEl) return;
   listEl.addEventListener('click', async (e) => {
@@ -1730,26 +1751,31 @@ function bindThoughtMigrateButtons(listEl) {
       const entry = await dbGetEntryById(id);
       if (!entry) { showToast('記録が見つかりません'); return; }
 
-      // その日にすでに思考記録が存在するか確認する
+      const newEpisode = { event: entry.body || '', praise: '' };
       const existing = await dbGetThoughtByDate(entry.date);
       let targetRecord;
 
       if (existing) {
-        // 既存の出来事欄の末尾に、改行2つを挟んで日記本文を追記する
-        const appended = (existing.event ? existing.event + '\n\n' : '') + (entry.body || '');
-        targetRecord = Object.assign({}, existing, { event: appended });
+        // 中身のある出来事だけを残して数える
+        const eps = getThoughtEpisodes(existing).filter((ep) => ep.event || ep.praise);
+        if (eps.length >= MAX_EPISODES) {
+          showToast(`${formatDateJp(entry.date)}の出来事はすでに${MAX_EPISODES}件あります。不要な出来事を整理してから追加してください`, 4200);
+          return;
+        }
+        targetRecord = Object.assign({}, existing, { episodes: eps.concat([newEpisode]) });
       } else {
-        // まだ思考記録がない日は、新規としてその日付・本文をセットする
-        targetRecord = { date: entry.date, event: entry.body || '' };
+        targetRecord = { date: entry.date, episodes: [newEpisode] };
       }
 
       switchView('view-thought');
-      openThoughtForm(targetRecord);
+      await openThoughtForm(targetRecord);
     } catch (err) {
       showError('思考記録への移行に失敗しました', err);
     }
   });
 }
+
+
 
 /* ---------------------------------------------------------
  * 16. タブの並び替え
@@ -2014,9 +2040,11 @@ function initBiometricSettings() {
   });
 }
 /* ---------------------------------------------------------
- * 18. 思考記録タブ
+ * 18. 思考記録タブ（1日1スコア＋出来事最大3件 ＆ 期間分析）
  * --------------------------------------------------------- */
+const MAX_EPISODES = 3;
 
+/* ===== DB：日々の思考記録（日付が主キー＝1日1件） ===== */
 async function dbGetAllThoughts() {
   const db = await openDB();
   return new Promise((resolve, reject) => {
@@ -2059,6 +2087,118 @@ async function dbBulkAddThoughts(thoughts) {
   });
 }
 
+/** 記録から出来事の配列を安全に取り出す（episodes が無い旧データは「出来事1」として扱う） */
+function getThoughtEpisodes(record) {
+  if (record && Array.isArray(record.episodes) && record.episodes.length > 0) {
+    return record.episodes.slice(0, MAX_EPISODES).map((ep) => ({
+      event: (ep && ep.event) || '',
+      praise: (ep && ep.praise) || ''
+    }));
+  }
+  return [{ event: (record && record.event) || '', praise: (record && record.praise) || '' }];
+}
+
+/* ===== DB：期間分析 ===== */
+async function dbGetAllPeriodAnalyses() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(PERIOD_STORE, 'readonly').objectStore(PERIOD_STORE).getAll();
+    req.onsuccess = () => {
+      const rows = req.result || [];
+      rows.sort((a, b) => {
+        const ka = `${a.dateFrom}|${a.dateTo}`;
+        const kb = `${b.dateFrom}|${b.dateTo}`;
+        return ka < kb ? 1 : ka > kb ? -1 : 0;   // 新しい期間が上
+      });
+      resolve(rows);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbGetPeriodAnalysisById(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(PERIOD_STORE, 'readonly').objectStore(PERIOD_STORE).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbSavePeriodAnalysis(record) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(PERIOD_STORE, 'readwrite').objectStore(PERIOD_STORE).put(record);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDeletePeriodAnalysis(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(PERIOD_STORE, 'readwrite').objectStore(PERIOD_STORE).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbBulkAddPeriodAnalyses(records) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PERIOD_STORE, 'readwrite');
+    const store = tx.objectStore(PERIOD_STORE);
+    records.forEach((r) => {
+      const clone = Object.assign({}, r);
+      delete clone.id;   // idは自動採番に任せる
+      store.add(clone);
+    });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/* ===== 画面の切り替え ===== */
+function setThoughtModeSwitchVisible(visible) {
+  const el = document.querySelector('.thought-mode-selector');
+  if (el) el.hidden = !visible;   // 入力中に誤って切り替えて内容を失わないよう、フォーム表示中は隠す
+}
+function showThoughtListView() {
+  document.getElementById('thought-list-view').hidden = false;
+  document.getElementById('thought-form-view').hidden = true;
+  setThoughtModeSwitchVisible(true);
+}
+function showThoughtFormView() {
+  document.getElementById('thought-list-view').hidden = true;
+  document.getElementById('thought-form-view').hidden = false;
+  setThoughtModeSwitchVisible(false);
+}
+function showPeriodListView() {
+  document.getElementById('period-list-view').hidden = false;
+  document.getElementById('period-form-view').hidden = true;
+  setThoughtModeSwitchVisible(true);
+}
+function showPeriodFormView() {
+  document.getElementById('period-list-view').hidden = true;
+  document.getElementById('period-form-view').hidden = false;
+  setThoughtModeSwitchVisible(false);
+}
+
+/** 「日々の記録」「期間分析」を切り替える */
+function setThoughtMode(mode) {
+  const isDaily = mode !== 'period';
+  document.getElementById('btn-thought-mode-daily').classList.toggle('active', isDaily);
+  document.getElementById('btn-thought-mode-period').classList.toggle('active', !isDaily);
+  document.getElementById('thought-period-container').hidden = isDaily;
+
+  if (isDaily) {
+    showThoughtListView();
+    refreshThoughtList();
+  } else {
+    document.getElementById('thought-list-view').hidden = true;
+    document.getElementById('thought-form-view').hidden = true;
+    showPeriodListView();
+    refreshPeriodAnalysisList();
+  }
+}
+
+/* ===== 日々の思考記録：点数（1日1セット） ===== */
 const THOUGHT_SCORE_FIELDS = ['pac', 'parallelFamily', 'parallelOther', 'objectivity', 'selfAffirm', 'otherAffirm', 'emotion'];
 let thoughtScores = {};
 
@@ -2091,7 +2231,6 @@ function updateThoughtDateDisplay() {
   const val = document.getElementById('thought-date').value;
   document.getElementById('thought-date-display').textContent = formatDateJp(val);
 }
-
 function initThoughtScoreSelectors() {
   document.querySelectorAll('.thought-score-selector').forEach((selector) => {
     const field = selector.dataset.field;
@@ -2107,36 +2246,61 @@ function initThoughtScoreSelectors() {
   document.getElementById('thought-date').addEventListener('change', updateThoughtDateDisplay);
 }
 
-function showThoughtListView() {
-  document.getElementById('thought-list-view').hidden = false;
-  document.getElementById('thought-form-view').hidden = true;
-}
-function showThoughtFormView() {
-  document.getElementById('thought-list-view').hidden = true;
-  document.getElementById('thought-form-view').hidden = false;
+/* ===== 日々の思考記録：出来事（最大3組）の入力欄 ===== */
+function updateEpisodeAddButton() {
+  const visible = 1 + [2, 3].filter((i) => !document.getElementById(`episode-box-${i}`).hidden).length;
+  document.getElementById('btn-add-episode').hidden = visible >= MAX_EPISODES;
 }
 
+/** 出来事の配列を、入力欄へ反映する（足りない枠は隠す） */
+function setEpisodesToForm(episodes) {
+  const list = episodes.length > 0 ? episodes.slice(0, MAX_EPISODES) : [{ event: '', praise: '' }];
+  for (let i = 1; i <= MAX_EPISODES; i++) {
+    const ep = list[i - 1];
+    document.getElementById(`thought-event-${i}`).value = ep ? ep.event : '';
+    document.getElementById(`thought-praise-${i}`).value = ep ? ep.praise : '';
+    if (i > 1) document.getElementById(`episode-box-${i}`).hidden = !ep;
+  }
+  updateEpisodeAddButton();
+}
+
+/** 表示中の入力欄から、出来事の配列を取り出す */
+function getEpisodesFromForm() {
+  const list = [];
+  for (let i = 1; i <= MAX_EPISODES; i++) {
+    if (i > 1 && document.getElementById(`episode-box-${i}`).hidden) continue;
+    list.push({
+      event: document.getElementById(`thought-event-${i}`).value.trim(),
+      praise: document.getElementById(`thought-praise-${i}`).value.trim()
+    });
+  }
+  return list;
+}
+
+/** 思考記録フォームを開く。record が null なら新規（今日の記録があれば編集モードで開く） */
 async function openThoughtForm(record) {
+  if (!record) {
+    const existingToday = await dbGetThoughtByDate(todayStr());
+    if (existingToday) {
+      showToast('今日の記録が既にあります。編集モードで開きます');
+      record = existingToday;
+    }
+  }
+
   resetThoughtScores();
   const date = record ? record.date : todayStr();
 
-  document.getElementById('thought-edit-date').value = date; // ★元の日付を記憶
+  document.getElementById('thought-edit-date').value = date;   // 元の日付を記憶
   document.getElementById('thought-date').value = date;
   updateThoughtDateDisplay();
-  document.getElementById('thought-event').value = record ? (record.event || '') : '';
-  document.getElementById('thought-praise').value = record ? (record.praise || '') : ''; // ★追加
+
+  setEpisodesToForm(record ? getThoughtEpisodes(record) : [{ event: '', praise: '' }]);
 
   if (record) {
     THOUGHT_SCORE_FIELDS.forEach((f) => (thoughtScores[f] = record[f] ?? null));
     document.getElementById('thought-mood').value = record.mood ?? 0;
     updateMoodDisplay(record.mood ?? 0);
     document.querySelectorAll('.thought-score-selector').forEach((sel) => renderThoughtScore(sel));
-  } else {
-    const existing = await dbGetThoughtByDate(date);
-    if (existing) {
-      showToast('今日の記録が既にあります。編集モードで開きます');
-      return openThoughtForm(existing);
-    }
   }
   showThoughtFormView();
 }
@@ -2148,17 +2312,21 @@ async function refreshThoughtList() {
     const rows = await dbGetAllThoughts();
     listEl.innerHTML = '';
     rows.forEach((row) => {
-      const preview = (row.event || '').replace(/\n/g, ' ');
-    const scoreText = [
-  row.pac            != null ? `②PAC：${row.pac}` : '',
-  row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
-  row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
-  row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
-  row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
-  row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
-  row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
-  row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
-].filter(Boolean).join('　');
+      const episodes = getThoughtEpisodes(row).filter((ep) => ep.event || ep.praise);
+      const preview = episodes
+        .map((ep, i) => `#${i + 1} ${(ep.event || '').replace(/\n/g, ' ')}`)
+        .join('　｜　');
+      const scoreText = [
+        row.pac            != null ? `②PAC：${row.pac}` : '',
+        row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
+        row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
+        row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
+        row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
+        row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
+        row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
+        row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
+      ].filter(Boolean).join('　');
+      const countBadge = episodes.length > 1 ? `<span class="episode-count-badge">出来事${episodes.length}件</span>` : '';
 
       const li = document.createElement('li');
       li.className = 'thought-entry-item';
@@ -2166,11 +2334,12 @@ async function refreshThoughtList() {
         <div class="thought-entry-head">
           <span class="thought-badge">🧠 思考記録</span>
           <span class="entry-date-label">${escapeHtml(formatDateJp(row.date))}</span>
+          ${countBadge}
         </div>
         <div class="thought-entry-scores">${escapeHtml(scoreText)}</div>
         <div class="thought-entry-preview">${escapeHtml(preview)}</div>
         <div class="thought-entry-actions">
-          <button type="button" class="btn-thought-delete" data-date="${row.date}">🗑 削除</button>
+          <button type="button" class="btn-thought-delete" data-date="${escapeHtml(row.date)}">🗑 削除</button>
         </div>`;
       li.addEventListener('click', (e) => {
         if (e.target.closest('.btn-thought-delete')) return;
@@ -2184,9 +2353,155 @@ async function refreshThoughtList() {
   }
 }
 
+/* ===== 期間分析 ===== */
+let periodRefToken = 0;   // 日付を素早く変えたとき、古い結果で上書きしないための札
+
+async function openPeriodAnalysisForm(record) {
+  const idEl = document.getElementById('period-edit-id');
+  const fromEl = document.getElementById('period-date-from');
+  const toEl = document.getElementById('period-date-to');
+
+  if (record) {
+    idEl.value = String(record.id);
+    fromEl.value = record.dateFrom;
+    toEl.value = record.dateTo;
+    document.getElementById('period-common').value = record.common || '';
+    document.getElementById('period-insight').value = record.insight || '';
+    document.getElementById('period-action').value = record.action || '';
+    document.getElementById('period-delete').hidden = false;
+  } else {
+    idEl.value = '';
+    const now = new Date();
+    const prev = new Date();
+    prev.setDate(prev.getDate() - 29);          // 初期値：直近30日
+    fromEl.value = formatDate(prev);
+    toEl.value = formatDate(now);
+    document.getElementById('period-common').value = '';
+    document.getElementById('period-insight').value = '';
+    document.getElementById('period-action').value = '';
+    document.getElementById('period-delete').hidden = true;
+  }
+
+  document.querySelectorAll('.period-ref-accordion').forEach((d) => { d.open = false; });
+  showPeriodFormView();
+  await updatePeriodReferenceUI();
+}
+
+/** 指定期間の思考記録を取得する（日付の古い順。1日1件なので「日単位」の集合） */
+async function getThoughtsInPeriod(dFrom, dTo) {
+  const all = await dbGetAllThoughts();
+  return all
+    .filter((r) => r.date >= dFrom && r.date <= dTo)
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+/** 対象日数・出来事数・平均スコア・本文を、期間に合わせて更新する */
+async function updatePeriodReferenceUI() {
+  const token = ++periodRefToken;
+  const dFrom = document.getElementById('period-date-from').value;
+  const dTo = document.getElementById('period-date-to').value;
+  const countEl = document.getElementById('period-record-count-msg');
+  const gridEl = document.getElementById('period-averages-grid');
+  const recsEl = document.getElementById('period-reference-records');
+
+  if (!dFrom || !dTo || dFrom > dTo) {
+    countEl.innerHTML = '対象：<strong>0日分</strong>（開始日が終了日より後になっていないか確認してください）';
+    gridEl.innerHTML = '';
+    recsEl.innerHTML = '';
+    return;
+  }
+
+  try {
+    const matched = await getThoughtsInPeriod(dFrom, dTo);
+    if (token !== periodRefToken) return;
+
+    const epCount = matched.reduce(
+      (sum, r) => sum + getThoughtEpisodes(r).filter((ep) => ep.event || ep.praise).length, 0);
+    countEl.innerHTML = `対象：<strong>${matched.length}日分</strong>／出来事 <strong>${epCount}件</strong>`;
+    renderAverageItems(gridEl, matched);   // 平均は日単位
+
+    recsEl.innerHTML = '';
+    if (matched.length === 0) {
+      recsEl.innerHTML = '<p class="settings-info">この期間の思考記録はありません。</p>';
+      return;
+    }
+    matched.forEach((r) => {
+      const moodText = r.mood != null ? `${r.mood > 0 ? '+' : ''}${r.mood}` : '−';
+      const episodes = getThoughtEpisodes(r).filter((ep) => ep.event || ep.praise);
+      const multi = episodes.length > 1;
+      const epHtml = episodes.map((ep, i) => `
+        <div class="period-ref-ep-item">
+          <p class="period-ref-card-body"><strong>⑨ 出来事${multi ? ' #' + (i + 1) : ''}：</strong>${escapeHtml(ep.event || '')}</p>
+          ${ep.praise ? `<p class="period-ref-card-body"><strong>⑩ 自分を褒める${multi ? ' #' + (i + 1) : ''}：</strong>${escapeHtml(ep.praise)}</p>` : ''}
+        </div>`).join('');
+
+      const card = document.createElement('div');
+      card.className = 'period-ref-card';
+      card.innerHTML = `
+        <div class="period-ref-card-head">
+          <strong>${escapeHtml(formatDateJp(r.date))}</strong>
+          <span>気分：${escapeHtml(moodText)}</span>
+        </div>
+        ${epHtml}`;
+      recsEl.appendChild(card);
+    });
+  } catch (err) {
+    showError('期間内の記録の取得に失敗しました', err);
+  }
+}
+
+async function refreshPeriodAnalysisList() {
+  const listEl = document.getElementById('period-analysis-list');
+  const emptyEl = document.getElementById('period-analysis-empty');
+  try {
+    const rows = await dbGetAllPeriodAnalyses();
+    listEl.innerHTML = '';
+    rows.forEach((row) => {
+      const oneLine = (t) => escapeHtml((t || '（未記入）').replace(/\n/g, ' '));
+      const li = document.createElement('li');
+      li.className = 'period-entry-item';
+      li.innerHTML = `
+        <div class="period-entry-head">
+          <span class="period-badge">📊 期間分析</span>
+          <span class="entry-date-label">${escapeHtml(formatDateJp(row.dateFrom))} 〜 ${escapeHtml(formatDateJp(row.dateTo))}</span>
+        </div>
+        <div class="period-preview-item"><strong>①共通点：</strong>${oneLine(row.common)}</div>
+        <div class="period-preview-item"><strong>②気づき：</strong>${oneLine(row.insight)}</div>
+        <div class="period-preview-item"><strong>③反省・改善策：</strong>${oneLine(row.action)}</div>`;
+      li.addEventListener('click', () => openPeriodAnalysisForm(row));
+      listEl.appendChild(li);
+    });
+    emptyEl.hidden = rows.length > 0;
+  } catch (err) {
+    showError('期間分析一覧の取得に失敗しました', err);
+  }
+}
+
+/* ===== 初期化 ===== */
 function initThoughtTab() {
   initThoughtScoreSelectors();
 
+  // 日々の記録 ⇔ 期間分析
+  document.getElementById('btn-thought-mode-daily').addEventListener('click', () => setThoughtMode('daily'));
+  document.getElementById('btn-thought-mode-period').addEventListener('click', () => setThoughtMode('period'));
+
+  // 出来事の追加・削除（削除すると、後ろの枠が前に詰まる）
+  document.getElementById('btn-add-episode').addEventListener('click', () => {
+    const eps = getEpisodesFromForm();
+    if (eps.length >= MAX_EPISODES) return;
+    eps.push({ event: '', praise: '' });
+    setEpisodesToForm(eps);
+  });
+  document.querySelectorAll('.btn-remove-episode').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const n = Number(btn.dataset.target);
+      const eps = getEpisodesFromForm();
+      eps.splice(n - 1, 1);
+      setEpisodesToForm(eps);
+    });
+  });
+
+  // ---- 日々の記録 ----
   document.getElementById('btn-new-thought').addEventListener('click', () => openThoughtForm(null));
   document.getElementById('thought-back-btn').addEventListener('click', () => { showThoughtListView(); refreshThoughtList(); });
   document.getElementById('thought-cancel').addEventListener('click', () => { showThoughtListView(); refreshThoughtList(); });
@@ -2195,7 +2510,7 @@ function initThoughtTab() {
     const btn = e.target.closest('.btn-thought-delete');
     if (!btn) return;
     e.stopPropagation();
-    if (!confirm('この思考記録を削除します。よろしいですか？')) return;
+    if (!confirm('この思考記録を削除します（その日の出来事もすべて消えます）。よろしいですか？')) return;
     try {
       await dbDeleteThought(btn.dataset.date);
       showToast('削除しました');
@@ -2207,39 +2522,107 @@ function initThoughtTab() {
     e.preventDefault();
     const newDate = document.getElementById('thought-date').value;
     const originalDate = document.getElementById('thought-edit-date').value;
-    const eventText = document.getElementById('thought-event').value.trim();
+    // 1組目は必須。2・3組目は中身がある場合だけ保存する
+    const episodes = getEpisodesFromForm().filter((ep, i) => i === 0 || ep.event || ep.praise);
 
     if (!newDate) { showToast('日付を入力してください'); return; }
-    if (!eventText) { showToast('⑨ 出来事を入力してください'); return; }
-
-    // ★日付を変更した場合、移動先に既存レコードがあれば確認し、元のレコードは必ず削除する
-    if (originalDate && originalDate !== newDate) {
-      const conflict = await dbGetThoughtByDate(newDate);
-      if (conflict && !confirm(`${formatDateJp(newDate)}の記録が既にあります。上書きしますか？`)) return;
-      await dbDeleteThought(originalDate);
-    }
-
-    const thought = {
-      date: newDate,
-      pac: thoughtScores.pac,
-      parallelFamily: thoughtScores.parallelFamily,
-      parallelOther: thoughtScores.parallelOther,
-      objectivity: thoughtScores.objectivity,
-      selfAffirm: thoughtScores.selfAffirm,
-      otherAffirm: thoughtScores.otherAffirm,
-      emotion: thoughtScores.emotion,
-      mood: Number(document.getElementById('thought-mood').value),
-      event: eventText,
-      praise: document.getElementById('thought-praise').value.trim(), // ★追加
-      updatedAt: new Date().toISOString()
-    };
+    if (!episodes[0].event) { showToast('⑨ 出来事（出来事1）を入力してください'); return; }
 
     try {
-      await dbSaveThought(thought);
+      const moved = !!originalDate && originalDate !== newDate;
+      if (moved) {
+        const conflict = await dbGetThoughtByDate(newDate);
+        if (conflict && !confirm(`${formatDateJp(newDate)}の記録が既にあります。上書きしますか？`)) return;
+      }
+
+      const thought = {
+        date: newDate,
+        pac: thoughtScores.pac,
+        parallelFamily: thoughtScores.parallelFamily,
+        parallelOther: thoughtScores.parallelOther,
+        objectivity: thoughtScores.objectivity,
+        selfAffirm: thoughtScores.selfAffirm,
+        otherAffirm: thoughtScores.otherAffirm,
+        emotion: thoughtScores.emotion,
+        mood: Number(document.getElementById('thought-mood').value),
+        episodes: episodes,
+        // 互換用：検索や古いバックアップとの読み合わせのため、結合した文字列も持たせる
+        event: episodes.map((ep) => ep.event).filter(Boolean).join('\n\n---\n\n'),
+        praise: episodes.map((ep) => ep.praise).filter(Boolean).join('\n\n'),
+        updatedAt: new Date().toISOString()
+      };
+
+      await dbSaveThought(thought);                          // 先に保存して、
+      if (moved) await dbDeleteThought(originalDate);        // 成功してから元の日付を消す
+
       showToast('思考記録を保存しました 🧠');
       showThoughtListView();
       refreshThoughtList();
     } catch (err) { showError('保存に失敗しました', err); }
+  });
+
+  // ---- 期間分析 ----
+  document.getElementById('btn-new-period-analysis').addEventListener('click', () => openPeriodAnalysisForm(null));
+  document.getElementById('period-back-btn').addEventListener('click', () => { showPeriodListView(); refreshPeriodAnalysisList(); });
+  document.getElementById('period-cancel').addEventListener('click', () => { showPeriodListView(); refreshPeriodAnalysisList(); });
+  document.getElementById('period-date-from').addEventListener('change', updatePeriodReferenceUI);
+  document.getElementById('period-date-to').addEventListener('change', updatePeriodReferenceUI);
+
+  document.getElementById('period-analysis-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const idVal = document.getElementById('period-edit-id').value;
+    const dateFrom = document.getElementById('period-date-from').value;
+    const dateTo = document.getElementById('period-date-to').value;
+    const common = document.getElementById('period-common').value.trim();
+    const insight = document.getElementById('period-insight').value.trim();
+    const action = document.getElementById('period-action').value.trim();
+
+    if (!dateFrom || !dateTo) { showToast('期間を指定してください'); return; }
+    if (dateFrom > dateTo) { showToast('開始日は終了日より前の日付にしてください'); return; }
+    if (!common && !insight && !action) { showToast('①②③のどれか1つは書いてください'); return; }
+
+    try {
+      // 同じ期間の分析は1件だけ
+      const all = await dbGetAllPeriodAnalyses();
+      const dup = all.find((r) => r.dateFrom === dateFrom && r.dateTo === dateTo && String(r.id) !== idVal);
+      if (dup) {
+        showToast('同じ期間の分析がすでにあります。一覧から開いて編集してください', 4200);
+        return;
+      }
+
+      // 新規作成のときは、対象の記録が0日なら保存しない
+      if (!idVal) {
+        const targets = await getThoughtsInPeriod(dateFrom, dateTo);
+        if (targets.length === 0) { showToast('この期間には思考記録がありません'); return; }
+      }
+
+      const nowIso = new Date().toISOString();
+      const record = { dateFrom, dateTo, common, insight, action, updatedAt: nowIso };
+      if (idVal) {
+        const existing = await dbGetPeriodAnalysisById(Number(idVal));
+        record.id = Number(idVal);
+        record.createdAt = existing && existing.createdAt ? existing.createdAt : nowIso;
+      } else {
+        record.createdAt = nowIso;
+      }
+
+      await dbSavePeriodAnalysis(record);
+      showToast('期間分析を保存しました 📊');
+      showPeriodListView();
+      refreshPeriodAnalysisList();
+    } catch (err) { showError('保存に失敗しました', err); }
+  });
+
+  document.getElementById('period-delete').addEventListener('click', async () => {
+    const idVal = document.getElementById('period-edit-id').value;
+    if (!idVal) return;
+    if (!confirm('この期間分析を削除します。よろしいですか？')) return;
+    try {
+      await dbDeletePeriodAnalysis(Number(idVal));
+      showToast('削除しました');
+      showPeriodListView();
+      refreshPeriodAnalysisList();
+    } catch (err) { showError('削除に失敗しました', err); }
   });
 }
 
@@ -2309,30 +2692,17 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
     y += 10;
     drawLine(180);
 
-    // ===== 思考記録：表紙に期間平均スコアを掲載 =====
+            // ===== 思考記録：表紙に期間平均スコアを掲載（日単位の平均） =====
     if (target === 'thought') {
-      const scoreFields = [
-        { key: 'pac',            label: '② PAC（自他肯定の構え）' },
-        { key: 'parallelFamily', label: '③ 平行交流：家族（配偶者）' },
-        { key: 'parallelOther',  label: '③ 平行交流：他者' },
-        { key: 'objectivity',    label: '④ 客観性（A）' },
-        { key: 'selfAffirm',     label: '⑤ 自己肯定' },
-        { key: 'otherAffirm',    label: '⑥ 他者肯定' },
-        { key: 'emotion',        label: '⑦ 感情表現（FC）' },
-        { key: 'mood',           label: '⑧ 気分点数' }
-      ];
       ensureSpace(20);
       doc.setFontSize(13);
-      doc.text('■ 期間平均スコア', marginX, y);
+      doc.text('■ 期間平均スコア（日ごとの点数の平均・小数点以下は四捨五入）', marginX, y);
       y += 20;
-      scoreFields.forEach(({ key, label }) => {
-        const vals = rows.map((r) => r[key]).filter((v) => v != null);
-        let valStr = '−（未記入）';
-        if (vals.length > 0) {
-          const avg = vals.reduce((s, v) => s + Number(v), 0) / vals.length;
-          valStr = key === 'mood' ? (avg > 0 ? `+${avg.toFixed(1)}` : avg.toFixed(1)) : `${avg.toFixed(1)} / 10`;
-          valStr += `（${vals.length}件の平均）`;
-        }
+      THOUGHT_AVG_FIELDS.forEach(({ key, label }) => {
+        const avg = calcThoughtAverage(rows, key);
+        const valStr = avg
+          ? `${formatThoughtAverage(key, avg.value)}（${avg.count}日分の平均）`
+          : '−（未記入）';
         ensureSpace(16);
         doc.setFontSize(10);
         doc.text(`${label}：${valStr}`, marginX + 10, y);
@@ -2340,6 +2710,8 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
       });
       drawLine(200);
     }
+
+
 
     // ===== 本文：日付順に各レコードを出力 =====
     rows.forEach((row, idx) => {
@@ -2354,6 +2726,7 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
 
       } else if (target === 'thought') {
         writeText(formatDateJp(row.date), 13);
+
         const scores = [
           row.pac            != null ? `②PAC:${row.pac}` : '',
           row.parallelFamily != null ? `③平行(家族):${row.parallelFamily}` : '',
@@ -2365,10 +2738,15 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
           row.mood           != null ? `⑧気分:${row.mood > 0 ? '+' : ''}${row.mood}` : ''
         ].filter(Boolean).join('　');
         if (scores) writeText(scores, 9);
-        writeText('【⑨出来事】', 10);
-        writeText(row.event || '', 10);
-        writeText('【⑩自分を褒める】', 10);          // ★追加
-        writeText(row.praise || '（未記入）', 10);   // ★追加
+        const eps = getThoughtEpisodes(row).filter((ep) => ep.event || ep.praise);
+        eps.forEach((ep, i) => {
+          const no = eps.length > 1 ? ` #${i + 1}` : '';
+          writeText(`【⑨出来事${no}】`, 10);
+          writeText(ep.event || '（未記入）', 10);
+          writeText(`【⑩自分を褒める${no}】`, 10);
+          writeText(ep.praise || '（未記入）', 10);
+        });
+
 
       } else if (target === 'racket') {
         writeText(`${row.date}　#${pad2(row.seq)}　${row.title}`, 13);
