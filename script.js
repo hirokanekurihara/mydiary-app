@@ -156,6 +156,25 @@ async function dbClearAll() {
     req.onerror = () => reject(req.error);
   });
 }
+/** 指定した保存場所のデータをすべて消す */
+async function dbClearStore(storeName) {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+
+    tx.oncomplete = () => resolve();
+    tx.onabort = () => reject(
+      tx.error || new Error('データの消去に失敗しました')
+    );
+    tx.onerror = () => reject(
+      tx.error || new Error('データの消去に失敗しました')
+    );
+
+    tx.objectStore(storeName).clear();
+  });
+}
+
 
 async function dbBulkAdd(entries) {
   const db = await openDB();
@@ -1248,6 +1267,10 @@ async function handleImportFile(e) {
     // ①日記データを入れ替え
     await dbClearAll();
     await dbBulkAdd(json.entries);
+
+    // 思考記録と心のメモも、復元する前に古いデータを消す
+    if (Array.isArray(json.thoughts)) await dbClearStore(THOUGHT_STORE);
+    if (Array.isArray(json.voices))   await dbClearStore(VOICE_STORE);
 
     // ②カスタムタグがあれば復元（★tryブロックの中に移動）
     if (Array.isArray(json.customTags)) {
