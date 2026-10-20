@@ -1242,3 +1242,112 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   padding: 8px 4px !important;
   font-size: 14px !important;
 }
+
+/* ===== 思考記録：日々の記録／期間分析の切り替え ===== */
+.thought-mode-selector {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.2rem;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.3rem;
+  border-radius: 10px;
+}
+.thought-mode-selector[hidden] { display: none; }
+.thought-mode-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 0.85rem;
+  padding: 0.55rem 0.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text-sub);
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  transition: all 0.15s;
+}
+.thought-mode-btn.active {
+  background: #fff;
+  color: var(--color-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+.seq-badge {
+  font-size: 0.8rem;
+  color: #2980b9;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+/* ===== 期間分析：一覧と参照カード ===== */
+.period-entry-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.period-entry-item {
+  border-left: 4px solid #16a085;
+  background: rgba(22, 160, 133, 0.06);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+}
+.period-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+.period-badge {
+  background: #16a085;
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.period-preview-item {
+  font-size: 0.83rem;
+  color: var(--color-text-sub);
+  line-height: 1.5;
+  margin-bottom: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.period-ref-accordion { margin-bottom: 1rem; }
+.period-ref-records-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.period-ref-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.82rem;
+}
+.period-ref-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+  color: var(--color-primary);
+}
+.period-ref-card-body {
+  margin: 0 0 0.3rem 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (prefers-color-scheme: dark) {
+  .thought-mode-selector { background: rgba(255, 255, 255, 0.1); }
+  .thought-mode-btn.active { background: #3a3a3a; color: #9fd6c4; }
+  .period-entry-item { background: rgba(22, 160, 133, 0.16); }
+}
