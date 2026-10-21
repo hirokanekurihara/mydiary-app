@@ -2354,6 +2354,36 @@ function hasEpisodeContent(ep) {
   return !!(ep && (ep.event || ep.praise || ep.common || ep.insight || ep.action));
 }
 
+/** 出来事 number（1〜3）の分析入力数を数え、折りたたみ見出しのバッジに表示する */
+function updateEpisodeAnalysisStatus(number) {
+  const summary = document.querySelector(`#episode-analysis-${number} > summary`);
+  if (!summary) return;
+
+  // バッジが無ければ、最初の1回だけ作る
+  let badge = summary.querySelector('.episode-analysis-status');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'episode-analysis-status';
+    summary.appendChild(badge);
+  }
+
+  // 3項目のうち、空白以外の文字がある項目を数える
+  const a = getEpisodeAnalysisFromForm(number);
+  const count = [a.common, a.insight, a.action].filter((t) => t !== '').length;
+
+  if (count === 0) {
+    badge.dataset.status = 'empty';
+    badge.textContent = '未分析 0/3';
+  } else if (count === 3) {
+    badge.dataset.status = 'complete';
+    badge.textContent = '分析済み 3/3';
+  } else {
+    badge.dataset.status = 'partial';
+    badge.textContent = `一部分析 ${count}/3`;
+  }
+}
+
+
 /** 出来事1〜3の入力ボックスに、折りたたみ式の分析欄を差し込む */
 function initEpisodeAnalysisFields() {
   const defs = [
@@ -2387,7 +2417,16 @@ function initEpisodeAnalysisFields() {
               placeholder="${d.hint}"></textarea>
           </div>`).join('')}
       </div>`;
-    box.appendChild(details);
+        box.appendChild(details);
+
+    // 入力するたびに、この出来事の分析入力数を更新する
+    // （details の中の3つの入力欄からの入力を、まとめて拾う）
+    details.addEventListener('input', () => {
+      updateEpisodeAnalysisStatus(i);
+    });
+
+    // 欄を作った直後の表示（未分析 0/3）
+    updateEpisodeAnalysisStatus(i);
   }
 }
 
@@ -2400,7 +2439,10 @@ function setEpisodeAnalysisToForm(number, ep) {
   });
   const details = document.getElementById(`episode-analysis-${number}`);
   if (details) details.open = !!(a.common || a.insight || a.action);   // 記入済みなら開いておく
+
+  updateEpisodeAnalysisStatus(number);   // ★追加：開いたとき・枠が詰まったときも表示を最新にする
 }
+
 
 /** 入力欄 number（1〜3）から分析3項目を読み取る */
 function getEpisodeAnalysisFromForm(number) {
