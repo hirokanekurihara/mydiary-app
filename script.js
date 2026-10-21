@@ -611,11 +611,29 @@ async function refreshListView() {
   try {
     const rows = await dbGetEntriesByDate(date);
     renderEntryList(listEl, rows, false);
+    markMigratedThoughtButtons(listEl);
+
     emptyEl.hidden = rows.length > 0;
   } catch (err) {
     showError('一覧の取得に失敗しました', err);
   }
 }
+
+/** 一覧のボタンを、移行済みの日記だけ「✅ 移行済み」の表示にする */
+async function markMigratedThoughtButtons(listEl) {
+  if (!listEl) return;
+  try {
+    const keys = await getMigratedSourceKeys();
+    listEl.querySelectorAll('.btn-thought-migrate').forEach((btn) => {
+      const done = !!btn.dataset.key && keys.has(btn.dataset.key);
+      btn.classList.toggle('migrated', done);
+      btn.textContent = done ? '✅ 移行済み' : '🧠 思考記録へ';
+    });
+  } catch (err) {
+    console.error('移行済み表示の更新に失敗しました', err);
+  }
+}
+
 
 function renderEntryList(listEl, rows, showDate) {
   listEl.innerHTML = '';
@@ -634,7 +652,7 @@ function renderEntryList(listEl, rows, showDate) {
       </div>
       ${tagsHtml ? `<div class="tag-badges">${tagsHtml}</div>` : ''}
       <div class="entry-item-actions">
-        <button type="button" class="btn-thought-migrate" data-id="${row.id}">🧠 思考記録へ</button>
+        <button type="button" class="btn-thought-migrate" data-id="${row.id}" data-key="${escapeHtml(row.createdAt || '')}">🧠 思考記録へ</button>
         <button type="button" class="btn-racket-migrate" data-id="${row.id}">🎭 ラケット感情へ</button>
       </div>
     `;
@@ -999,6 +1017,8 @@ async function runSearch() {
         return (a.seq || 0) - (b.seq || 0);
       });
       renderEntryList(listEl, filtered, true);
+      markMigratedThoughtButtons(listEl);
+
       emptyEl.hidden = filtered.length > 0;
       appState.lastSearchResults = filtered;
       pdfBtn.hidden = filtered.length === 0;
@@ -1759,7 +1779,8 @@ function bindRacketMigrateButtons(listEl) {
 }
 
 
-/* 一覧の「🧠 思考記録へ」ボタン：日記本文を「新しい出来事」としてその日の思考記録へ渡す */
+/* 一覧の「🧠 思考記録へ」ボタン：日記本文を「新しい出来事」としてその日の思考記録へ渡す
+   ※同じ日記からの移行は1回だけ（保存された出来事に移行元の印が残っていれば止める） */
 function bindThoughtMigrateButtons(listEl) {
   if (!listEl) return;
   listEl.addEventListener('click', async (e) => {
@@ -1771,7 +1792,19 @@ function bindThoughtMigrateButtons(listEl) {
       const entry = await dbGetEntryById(id);
       if (!entry) { showToast('記録が見つかりません'); return; }
 
+      // ★すでに移行済みの日記なら、ここで止める
+      const sourceKey = getEntrySourceKey(entry);
+      if (sourceKey) {
+        const migrated = await getMigratedSourceKeys();
+        if (migrated.has(sourceKey)) {
+          showToast('この日記はすでに思考記録へ移行済みです', 3600);
+          return;
+        }
+      }
+
       const newEpisode = { event: entry.body || '', praise: '' };
+      if (sourceKey) newEpisode.sourceKey = sourceKey;   // ★保存されたときに、この印が残る
+
       const existing = await dbGetThoughtByDate(entry.date);
       let targetRecord;
 
@@ -1788,12 +1821,13 @@ function bindThoughtMigrateButtons(listEl) {
       }
 
       switchView('view-thought');
-      await openThoughtForm(targetRecord);
+      await openThoughtForm(targetRecord);   // フォームを開くだけ。保存するまでDBは変わらない
     } catch (err) {
       showError('思考記録への移行に失敗しました', err);
     }
   });
 }
+
 
 
 
@@ -2110,13 +2144,35 @@ async function dbBulkAddThoughts(thoughts) {
 /** 記録から出来事の配列を安全に取り出す（episodes が無い旧データは「出来事1」として扱う） */
 function getThoughtEpisodes(record) {
   if (record && Array.isArray(record.episodes) && record.episodes.length > 0) {
-    return record.episodes.slice(0, MAX_EPISODES).map((ep) => ({
-      event: (ep && ep.event) || '',
-      praise: (ep && ep.praise) || ''
-    }));
+    return record.episodes.slice(0, MAX_EPISODES).map((ep) => {
+      const item = {
+        event: (ep && ep.event) || '',
+        praise: (ep && ep.praise) || ''
+      };
+      if (ep && ep.sourceKey) item.sourceKey = ep.sourceKey;   // ★移行元の印を引き継ぐ
+      return item;
+    });
   }
   return [{ event: (record && record.event) || '', praise: (record && record.praise) || '' }];
 }
+
+/** 日記1件を見分ける印。編集してもバックアップから復元しても変わない作成日時を使う */
+function getEntrySourceKey(entry) {
+  return entry && entry.createdAt ? String(entry.createdAt) : '';
+}
+
+/** すでに思考記録へ移行済みの日記の印を、すべて集める */
+async function getMigratedSourceKeys() {
+  const all = await dbGetAllThoughts();
+  const keys = new Set();
+  all.forEach((t) => {
+    if (Array.isArray(t.episodes)) {
+      t.episodes.forEach((ep) => { if (ep && ep.sourceKey) keys.add(ep.sourceKey); });
+    }
+  });
+  return keys;
+}
+
 
 /* ===== DB：期間分析 ===== */
 async function dbGetAllPeriodAnalyses() {
@@ -2272,17 +2328,38 @@ function updateEpisodeAddButton() {
   document.getElementById('btn-add-episode').hidden = visible >= MAX_EPISODES;
 }
 
+/** 出来事ごとの「移行元の日記の印」。入力欄1〜3に対応する（無い枠は null） */
+let episodeSourceKeys = [null, null, null];
+
 /** 出来事の配列を、入力欄へ反映する（足りない枠は隠す） */
 function setEpisodesToForm(episodes) {
   const list = episodes.length > 0 ? episodes.slice(0, MAX_EPISODES) : [{ event: '', praise: '' }];
+  episodeSourceKeys = [null, null, null];
   for (let i = 1; i <= MAX_EPISODES; i++) {
     const ep = list[i - 1];
     document.getElementById(`thought-event-${i}`).value = ep ? ep.event : '';
     document.getElementById(`thought-praise-${i}`).value = ep ? ep.praise : '';
+    episodeSourceKeys[i - 1] = (ep && ep.sourceKey) || null;
     if (i > 1) document.getElementById(`episode-box-${i}`).hidden = !ep;
   }
   updateEpisodeAddButton();
 }
+
+/** 表示中の入力欄から、出来事の配列を取り出す（印も一緒に持ち帰る） */
+function getEpisodesFromForm() {
+  const list = [];
+  for (let i = 1; i <= MAX_EPISODES; i++) {
+    if (i > 1 && document.getElementById(`episode-box-${i}`).hidden) continue;
+    const item = {
+      event: document.getElementById(`thought-event-${i}`).value.trim(),
+      praise: document.getElementById(`thought-praise-${i}`).value.trim()
+    };
+    if (episodeSourceKeys[i - 1]) item.sourceKey = episodeSourceKeys[i - 1];
+    list.push(item);
+  }
+  return list;
+}
+
 
 /** 表示中の入力欄から、出来事の配列を取り出す */
 function getEpisodesFromForm() {
