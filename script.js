@@ -1824,7 +1824,7 @@ function bindThoughtMigrateButtons(listEl) {
 
       if (existing) {
         // 中身のある出来事だけを残して数える
-        const eps = getThoughtEpisodes(existing).filter((ep) => ep.event || ep.praise);
+        const eps = getThoughtEpisodes(existing);
         if (eps.length >= MAX_EPISODES) {
           showToast(`${formatDateJp(entry.date)}の出来事はすでに${MAX_EPISODES}件あります。不要な出来事を整理してから追加してください`, 4200);
           return;
@@ -2164,7 +2164,9 @@ function getThoughtEpisodes(record) {
         praise: (ep && ep.praise) || ''
       };
       if (ep && ep.sourceKey) item.sourceKey = ep.sourceKey;   // ★移行元の印を引き継ぐ
+      Object.assign(item, getEpisodeAnalysis(ep));             // ★追加：分析3項目も引き継ぐ
       return item;
+
     });
   }
   return [{ event: (record && record.event) || '', praise: (record && record.praise) || '' }];
@@ -2336,6 +2338,80 @@ function initThoughtScoreSelectors() {
   document.getElementById('thought-date').addEventListener('change', updateThoughtDateDisplay);
 }
 
+/* ===== 出来事ごとの分析（共通点・気づき・反省・改善策） ===== */
+
+/** 出来事から分析3項目を取り出す。旧データ（項目なし）は空欄として扱う */
+function getEpisodeAnalysis(ep) {
+  return {
+    common:  String((ep && ep.common)  || ''),
+    insight: String((ep && ep.insight) || ''),
+    action:  String((ep && ep.action)  || '')
+  };
+}
+
+/** 出来事に中身があるか（分析だけ書いた出来事も「中身あり」として扱う） */
+function hasEpisodeContent(ep) {
+  return !!(ep && (ep.event || ep.praise || ep.common || ep.insight || ep.action));
+}
+
+/** 出来事1〜3の入力ボックスに、折りたたみ式の分析欄を差し込む */
+function initEpisodeAnalysisFields() {
+  const defs = [
+    { key: 'common',  label: '共通点（状況と要素）',
+      hint: '似た出来事との共通点、状況、相手、時間帯、きっかけなど' },
+    { key: 'insight', label: '気づき（心理的側面）',
+      hint: 'そのときの考え・感情・思い込み、PACやAの動きへの気づき' },
+    { key: 'action',  label: '反省・改善策（具体的な改善と対策）',
+      hint: '次に同じ場面が来たらどう動くか。「気をつける」で終わらせず行動の形で' }
+  ];
+
+  for (let i = 1; i <= MAX_EPISODES; i++) {
+    const box = document.getElementById(`episode-box-${i}`);
+    if (!box) {
+      // 欄が差し込めなくても、思考記録タブ全体は止めない
+      console.error(`出来事${i}の入力エリアが見つからないため、分析欄を追加できません`);
+      continue;
+    }
+    if (document.getElementById(`episode-analysis-${i}`)) continue;   // 二重追加の防止
+
+    const details = document.createElement('details');
+    details.id = `episode-analysis-${i}`;
+    details.className = 'thought-guide episode-analysis';
+    details.innerHTML = `
+      <summary>🔎 この出来事を分析する</summary>
+      <div class="thought-guide-content">
+        ${defs.map((d) => `
+          <div class="form-row">
+            <label for="episode-${d.key}-${i}">${d.label}</label>
+            <textarea id="episode-${d.key}-${i}" class="episode-analysis-input" rows="3"
+              placeholder="${d.hint}"></textarea>
+          </div>`).join('')}
+      </div>`;
+    box.appendChild(details);
+  }
+}
+
+/** 分析3項目を、入力欄 number（1〜3）へ表示する。ep が無い枠は空にする */
+function setEpisodeAnalysisToForm(number, ep) {
+  const a = getEpisodeAnalysis(ep);
+  ['common', 'insight', 'action'].forEach((key) => {
+    const el = document.getElementById(`episode-${key}-${number}`);
+    if (el) el.value = a[key];
+  });
+  const details = document.getElementById(`episode-analysis-${number}`);
+  if (details) details.open = !!(a.common || a.insight || a.action);   // 記入済みなら開いておく
+}
+
+/** 入力欄 number（1〜3）から分析3項目を読み取る */
+function getEpisodeAnalysisFromForm(number) {
+  const read = (key) => {
+    const el = document.getElementById(`episode-${key}-${number}`);
+    return el ? el.value.trim() : '';
+  };
+  return { common: read('common'), insight: read('insight'), action: read('action') };
+}
+
+
 /* ===== 日々の思考記録：出来事（最大3組）の入力欄 ===== */
 function updateEpisodeAddButton() {
   const visible = 1 + [2, 3].filter((i) => !document.getElementById(`episode-box-${i}`).hidden).length;
@@ -2353,6 +2429,7 @@ function setEpisodesToForm(episodes) {
     const ep = list[i - 1];
     document.getElementById(`thought-event-${i}`).value = ep ? ep.event : '';
     document.getElementById(`thought-praise-${i}`).value = ep ? ep.praise : '';
+    setEpisodeAnalysisToForm(i, ep);   // ★追加（ep が無い枠は空になる）
     episodeSourceKeys[i - 1] = (ep && ep.sourceKey) || null;
     if (i > 1) document.getElementById(`episode-box-${i}`).hidden = !ep;
   }
@@ -2369,7 +2446,9 @@ function getEpisodesFromForm() {
       praise: document.getElementById(`thought-praise-${i}`).value.trim()
     };
     if (episodeSourceKeys[i - 1]) item.sourceKey = episodeSourceKeys[i - 1];
+    Object.assign(item, getEpisodeAnalysisFromForm(i));   // ★追加：分析3項目も一緒に保存
     list.push(item);
+
   }
   return list;
 }
@@ -2410,7 +2489,7 @@ async function refreshThoughtList() {
     const rows = await dbGetAllThoughts();
     listEl.innerHTML = '';
     rows.forEach((row) => {
-      const episodes = getThoughtEpisodes(row).filter((ep) => ep.event || ep.praise);
+      const episodes = getThoughtEpisodes(row).filter(hasEpisodeContent);
       const preview = episodes
         .map((ep, i) => `#${i + 1} ${(ep.event || '').replace(/\n/g, ' ')}`)
         .join('　｜　');
@@ -2514,7 +2593,7 @@ async function updatePeriodReferenceUI() {
     if (token !== periodRefToken) return;
 
     const epCount = matched.reduce(
-      (sum, r) => sum + getThoughtEpisodes(r).filter((ep) => ep.event || ep.praise).length, 0);
+      (sum, r) => sum + getThoughtEpisodes(r).filter(hasEpisodeContent).length, 0);
     countEl.innerHTML = `対象：<strong>${matched.length}日分</strong>／出来事 <strong>${epCount}件</strong>`;
     renderAverageItems(gridEl, matched);   // 平均は日単位
 
@@ -2525,13 +2604,23 @@ async function updatePeriodReferenceUI() {
     }
     matched.forEach((r) => {
       const moodText = r.mood != null ? `${r.mood > 0 ? '+' : ''}${r.mood}` : '−';
-      const episodes = getThoughtEpisodes(r).filter((ep) => ep.event || ep.praise);
+      const episodes = getThoughtEpisodes(r).filter(hasEpisodeContent);
       const multi = episodes.length > 1;
-      const epHtml = episodes.map((ep, i) => `
+        const epHtml = episodes.map((ep, i) => {
+        const no = multi ? ' #' + (i + 1) : '';
+        const row = (label, text, extraClass) => text
+          ? `<p class="period-ref-card-body ${extraClass || ''}"><strong>${label}${no}：</strong>${escapeHtml(text)}</p>`
+          : '';
+        return `
         <div class="period-ref-ep-item">
-          <p class="period-ref-card-body"><strong>⑨ 出来事${multi ? ' #' + (i + 1) : ''}：</strong>${escapeHtml(ep.event || '')}</p>
-          ${ep.praise ? `<p class="period-ref-card-body"><strong>⑩ 自分を褒める${multi ? ' #' + (i + 1) : ''}：</strong>${escapeHtml(ep.praise)}</p>` : ''}
-        </div>`).join('');
+          ${row('⑨ 出来事', ep.event || '')}
+          ${row('⑩ 自分を褒める', ep.praise)}
+          ${row('共通点', ep.common, 'period-ref-analysis')}
+          ${row('気づき', ep.insight, 'period-ref-analysis')}
+          ${row('反省・改善策', ep.action, 'period-ref-analysis')}
+        </div>`;
+      }).join('');
+
 
       const card = document.createElement('div');
       card.className = 'period-ref-card';
@@ -2577,7 +2666,9 @@ async function refreshPeriodAnalysisList() {
 
 /* ===== 初期化 ===== */
 function initThoughtTab() {
+  initEpisodeAnalysisFields();      // ★追加：分析欄を準備する
   initThoughtScoreSelectors();
+
 
   // 日々の記録 ⇔ 期間分析
   document.getElementById('btn-thought-mode-daily').addEventListener('click', () => setThoughtMode('daily'));
@@ -2621,7 +2712,7 @@ function initThoughtTab() {
     const newDate = document.getElementById('thought-date').value;
     const originalDate = document.getElementById('thought-edit-date').value;
     // 1組目は必須。2・3組目は中身がある場合だけ保存する
-    const episodes = getEpisodesFromForm().filter((ep, i) => i === 0 || ep.event || ep.praise);
+    const episodes = getEpisodesFromForm().filter((ep, i) => i === 0 || hasEpisodeContent(ep));
 
     if (!newDate) { showToast('日付を入力してください'); return; }
     if (!episodes[0].event) { showToast('⑨ 出来事（出来事1）を入力してください'); return; }
@@ -2836,14 +2927,19 @@ async function exportSearchResultsToPdf(target, rows, dateFrom, dateTo) {
           row.mood           != null ? `⑧気分:${row.mood > 0 ? '+' : ''}${row.mood}` : ''
         ].filter(Boolean).join('　');
         if (scores) writeText(scores, 9);
-        const eps = getThoughtEpisodes(row).filter((ep) => ep.event || ep.praise);
+        const eps = getThoughtEpisodes(row).filter(hasEpisodeContent);
         eps.forEach((ep, i) => {
           const no = eps.length > 1 ? ` #${i + 1}` : '';
           writeText(`【⑨出来事${no}】`, 10);
           writeText(ep.event || '（未記入）', 10);
           writeText(`【⑩自分を褒める${no}】`, 10);
           writeText(ep.praise || '（未記入）', 10);
+          // 分析は、書いてある項目だけ出力する（見出しは絵文字なし：PDF用フォントでの文字化け防止）
+          if (ep.common)  { writeText(`【共通点${no}】`, 10);       writeText(ep.common, 10); }
+          if (ep.insight) { writeText(`【気づき${no}】`, 10);       writeText(ep.insight, 10); }
+          if (ep.action)  { writeText(`【反省・改善策${no}】`, 10); writeText(ep.action, 10); }
         });
+
 
 
       } else if (target === 'racket') {
