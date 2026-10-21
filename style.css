@@ -1421,3 +1421,45 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
   color: rgba(255, 255, 255, 0.85);
   white-space: nowrap;
 }
+/* ===== 出来事ごとの分析入力欄 ===== */
+.episode-analysis {
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+.episode-analysis .thought-guide-content {
+  padding-top: 8px;
+}
+.episode-analysis .form-row:last-child {
+  margin-bottom: 0;
+}
+
+/* 分析3項目の入力文字だけ赤にする（-webkit-text-fill-color は iOS Safari 対策） */
+textarea.episode-analysis-input {
+  color: #b42318;
+  -webkit-text-fill-color: #b42318;
+  caret-color: #b42318;
+  min-height: 100px;
+}
+/* 入力例は、入力した文字と区別するためグレー */
+textarea.episode-analysis-input::placeholder {
+  color: var(--color-text-sub);
+  -webkit-text-fill-color: var(--color-text-sub);
+  opacity: 0.8;
+}
+
+/* 期間分析の参照欄での分析表示 */
+.period-ref-analysis {
+  color: #b42318;
+}
+
+/* ダークモードでは、暗い背景で読める明るめの赤にする */
+@media (prefers-color-scheme: dark) {
+  textarea.episode-analysis-input {
+    color: #ff9b94;
+    -webkit-text-fill-color: #ff9b94;
+    caret-color: #ff9b94;
+  }
+  .period-ref-analysis {
+    color: #ff9b94;
+  }
+}
