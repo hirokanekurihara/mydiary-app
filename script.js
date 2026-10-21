@@ -54,11 +54,13 @@ function escapeHtml(str) {
  * 1. IndexedDB ラッパー
  * --------------------------------------------------------- */
 const DB_NAME = 'DiaryDB';
-const DB_VERSION = 4;                       // ★ 3 → 4
+const DB_VERSION = 5;                       // ★ 3 → 4
 const STORE_NAME = 'entries';
 const THOUGHT_STORE = 'thoughts';           // 1日1件（日付が主キー）。出来事は episodes 配列で持つ
 const VOICE_STORE = 'voices';
 const PERIOD_STORE = 'period_analyses';     // ★ 期間分析の保管庫
+const ADVICE_STORE = 'teacher_advices';     // ★ 先生の助言
+
 
 let dbInstance = null;
 
@@ -84,6 +86,11 @@ function openDB() {
       if (!db.objectStoreNames.contains(PERIOD_STORE)) {
         db.createObjectStore(PERIOD_STORE, { keyPath: 'id', autoIncrement: true });
       }
+            // ★先生の助言ストア
+      if (!db.objectStoreNames.contains(ADVICE_STORE)) {
+        db.createObjectStore(ADVICE_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+
     };
 
     req.onsuccess = (event) => {
@@ -852,11 +859,25 @@ function roundHalfAway(n) {
  * 未記入の日は除外。値が1つも無ければ null
  */
 function calcThoughtAverage(rows, key) {
-  const vals = rows.map((r) => r[key]).filter((v) => v != null);
+  const vals = rows
+    .map((r) => r[key])
+    .filter((v) => v != null && String(v).trim() !== '')
+    .map(Number)
+    .filter(Number.isFinite);
+
   if (vals.length === 0) return null;
-  const avg = vals.reduce((s, v) => s + Number(v), 0) / vals.length;
-  return { value: roundHalfAway(avg), count: vals.length };
+
+  const avg = vals.reduce((sum, v) => sum + v, 0) / vals.length;
+
+  // ⑧気分は「平均から直接」10点刻みに丸める（先に整数へ丸めると二重丸めになる）
+  // それ以外は、これまでどおり整数に四捨五入
+  const value = key === 'mood'
+    ? Math.max(-100, Math.min(100, roundHalfAway(avg / 10) * 10))
+    : roundHalfAway(avg);
+
+  return { value, count: vals.length };
 }
+
 
 function formatThoughtAverage(key, value) {
   if (key === 'mood') return value > 0 ? `+${value}` : String(value);
@@ -1262,6 +1283,8 @@ async function doBackup() {
     const thoughts = await dbGetAllThoughts();
     const voices = await dbGetAllVoices();
     const periodAnalyses = await dbGetAllPeriodAnalyses();   // ★追加
+    const teacherAdvices = await dbGetAllAdvices();
+
     const payload = {
       version: 1,
       exportedAt: nowIso,
@@ -1269,7 +1292,9 @@ async function doBackup() {
       customTags,
       thoughts,
       voices,
-      periodAnalyses                                          // ★追加
+      periodAnalyses,
+      teacherAdvices
+                                         // ★追加
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1340,6 +1365,8 @@ async function handleImportFile(e) {
     if (Array.isArray(json.thoughts))       await dbClearStore(THOUGHT_STORE);
     if (Array.isArray(json.voices))         await dbClearStore(VOICE_STORE);
     if (Array.isArray(json.periodAnalyses)) await dbClearStore(PERIOD_STORE);
+    if (Array.isArray(json.teacherAdvices)) await dbClearStore(ADVICE_STORE);
+
 
     // ②カスタムタグ
     if (Array.isArray(json.customTags)) {
@@ -1359,6 +1386,10 @@ async function handleImportFile(e) {
     if (Array.isArray(json.periodAnalyses)) {
       await dbBulkAddPeriodAnalyses(json.periodAnalyses);
     }
+    if (Array.isArray(json.teacherAdvices)) {
+      await dbBulkAddAdvices(json.teacherAdvices);
+    }
+
 
     showToast('復元が完了しました ✅');
     await refreshListView();
@@ -1403,6 +1434,7 @@ function initAppOnce() {
   safeInit('initSettingsView', initSettingsView);
   safeInit('initRacketTab', initRacketTab);
   safeInit('initThoughtTab', initThoughtTab);
+  safeInit('initAdviceFeature', initAdviceFeature);
   safeInit('initVoiceTab', initVoiceTab);
 
     safeInit('bindRacketMigrateButtons(entry-list)', () =>
@@ -2272,23 +2304,38 @@ function showPeriodFormView() {
   setThoughtModeSwitchVisible(false);
 }
 
-/** 「日々の記録」「期間分析」を切り替える */
+/** 日々の記録／期間分析／先生の助言を切り替える */
 function setThoughtMode(mode) {
-  const isDaily = mode !== 'period';
-  document.getElementById('btn-thought-mode-daily').classList.toggle('active', isDaily);
-  document.getElementById('btn-thought-mode-period').classList.toggle('active', !isDaily);
-  document.getElementById('thought-period-container').hidden = isDaily;
+  const selected = ['daily', 'period', 'advice'].includes(mode) ? mode : 'daily';
 
-  if (isDaily) {
+  [
+    ['btn-thought-mode-daily', 'daily'],
+    ['btn-thought-mode-period', 'period'],
+    ['btn-thought-mode-advice', 'advice']
+  ].forEach(([id, value]) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.classList.toggle('active', selected === value);
+  });
+
+  document.getElementById('thought-list-view').hidden = true;
+  document.getElementById('thought-form-view').hidden = true;
+  document.getElementById('thought-period-container').hidden = selected !== 'period';
+
+  const adviceContainer = document.getElementById('thought-advice-container');
+  if (adviceContainer) adviceContainer.hidden = selected !== 'advice';
+
+  if (selected === 'daily') {
     showThoughtListView();
     refreshThoughtList();
-  } else {
-    document.getElementById('thought-list-view').hidden = true;
-    document.getElementById('thought-form-view').hidden = true;
+  } else if (selected === 'period') {
     showPeriodListView();
     refreshPeriodAnalysisList();
+  } else {
+    showAdviceListView();
+    refreshAdviceList();
   }
 }
+
 
 /* ===== 日々の思考記録：点数（1日1セット） ===== */
 const THOUGHT_SCORE_FIELDS = ['pac', 'parallelFamily', 'parallelOther', 'objectivity', 'selfAffirm', 'otherAffirm', 'emotion'];
@@ -2616,6 +2663,8 @@ async function getThoughtsInPeriod(dFrom, dTo) {
 
 /** 対象日数・出来事数・平均スコア・本文を、期間に合わせて更新する */
 async function updatePeriodReferenceUI() {
+  updateAdvicePeriodReference();
+
   const token = ++periodRefToken;
   const dFrom = document.getElementById('period-date-from').value;
   const dTo = document.getElementById('period-date-to').value;
@@ -3213,6 +3262,415 @@ function initVoiceTab() {
       refreshVoiceList();
     } catch (err) {
       showError('削除に失敗しました', err);
+    }
+  });
+}
+/* ---------------------------------------------------------
+ * 22. 先生の助言
+ * --------------------------------------------------------- */
+
+/* ===== 保存処理 ===== */
+
+/** 助言ストアの操作。書き込みはトランザクションの完了まで待つ */
+async function runAdviceStore(mode, operation) {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ADVICE_STORE, mode);
+    let result;
+
+    tx.oncomplete = () => resolve(result);
+    tx.onabort = () => reject(tx.error || new Error('先生の助言の処理が中断されました'));
+    tx.onerror = () => reject(tx.error || new Error('先生の助言の処理に失敗しました'));
+
+    try {
+      const req = operation(tx.objectStore(ADVICE_STORE));
+      if (req) req.onsuccess = () => { result = req.result; };
+    } catch (err) {
+      tx.abort();
+      reject(err);
+    }
+  });
+}
+
+async function dbGetAllAdvices() {
+  return (await runAdviceStore('readonly', (store) => store.getAll())) || [];
+}
+async function dbGetAdviceById(id) {
+  return (await runAdviceStore('readonly', (store) => store.get(id))) || null;
+}
+async function dbSaveAdvice(record) {
+  return runAdviceStore('readwrite', (store) => store.put(record));
+}
+async function dbDeleteAdvice(id) {
+  return runAdviceStore('readwrite', (store) => store.delete(id));
+}
+async function dbBulkAddAdvices(records) {
+  return runAdviceStore('readwrite', (store) => {
+    records.forEach((record) => {
+      const clone = { ...record };
+      delete clone.id;          // idは自動採番に任せる（復元時の衝突回避）
+      store.add(clone);
+    });
+  });
+}
+
+/* ===== 表示用の部品 ===== */
+
+function advicePeriodLabel(record) {
+  return `${formatDateJp(record.dateFrom)} 〜 ${formatDateJp(record.dateTo)}`;
+}
+
+/** 日付範囲が少しでも重なるか（両端の日付も含む） */
+function adviceOverlaps(record, from, to) {
+  return record.dateFrom <= to && record.dateTo >= from;
+}
+
+function adviceTextHtml(label, text) {
+  if (!text) return '';
+  return `
+    <div class="advice-text-section">
+      <strong>${escapeHtml(label)}</strong>
+      <p class="advice-full-text">${escapeHtml(text)}</p>
+    </div>`;
+}
+
+/** ピン留め → 対象期間の終了日が新しい順 → 更新が新しい順 */
+function sortAdvices(rows) {
+  return rows.sort((a, b) => {
+    const pinDiff = Number(!!b.pinned) - Number(!!a.pinned);
+    if (pinDiff) return pinDiff;
+    const endDiff = String(b.dateTo || '').localeCompare(String(a.dateTo || ''));
+    if (endDiff) return endDiff;
+    return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+  });
+}
+
+/* ===== 一覧・フォーム ===== */
+
+function showAdviceListView() {
+  document.getElementById('advice-list-view').hidden = false;
+  document.getElementById('advice-form-view').hidden = true;
+  setThoughtModeSwitchVisible(true);
+}
+
+async function refreshAdviceList() {
+  const listEl = document.getElementById('advice-list');
+  const emptyEl = document.getElementById('advice-list-empty');
+  if (!listEl || !emptyEl) return;
+
+  try {
+    const rows = sortAdvices(await dbGetAllAdvices());
+    listEl.innerHTML = '';
+
+    rows.forEach((row) => {
+      const li = document.createElement('li');
+      li.className = 'advice-card' + (row.pinned ? ' is-pinned' : '');
+
+      li.innerHTML = `
+        <details class="advice-read">
+          <summary>
+            <span class="advice-card-label">🧑‍🏫 先生の助言</span>
+            <span class="advice-card-title">${row.pinned ? '📌 ' : ''}${escapeHtml(row.title || '')}</span>
+            <span class="advice-card-period">対象期間：${escapeHtml(advicePeriodLabel(row))}</span>
+          </summary>
+          <div class="advice-card-body">
+            ${row.receivedDate
+              ? `<p class="settings-info">助言を受けた日：${escapeHtml(formatDateJp(row.receivedDate))}</p>`
+              : ''}
+            ${adviceTextHtml('先生からの助言', row.content)}
+            ${adviceTextHtml('自分が試すこと', row.practice)}
+          </div>
+        </details>
+        <button type="button" class="btn btn-secondary advice-edit-btn">✏️ 編集する</button>`;
+
+      li.querySelector('.advice-edit-btn').addEventListener('click', () => openAdviceForm(row));
+      listEl.appendChild(li);
+    });
+
+    emptyEl.hidden = rows.length > 0;
+  } catch (err) {
+    showError('先生の助言の取得に失敗しました', err);
+  }
+}
+
+/** record が null なら新規。preset（{dateFrom, dateTo}）は期間分析から作るとき用 */
+function openAdviceForm(record, preset) {
+  const today = todayStr();
+
+  document.getElementById('advice-edit-id').value = record ? record.id : '';
+  document.getElementById('advice-date-from').value =
+    record ? record.dateFrom : (preset && preset.dateFrom) || today;
+  document.getElementById('advice-date-to').value =
+    record ? record.dateTo : (preset && preset.dateTo) || today;
+  document.getElementById('advice-received-date').value =
+    record ? (record.receivedDate || '') : today;
+  document.getElementById('advice-title').value = record ? (record.title || '') : '';
+  document.getElementById('advice-content').value = record ? (record.content || '') : '';
+  document.getElementById('advice-practice').value = record ? (record.practice || '') : '';
+  document.getElementById('advice-pinned').checked = !!(record && record.pinned);
+  document.getElementById('advice-practice-details').open = !!(record && record.practice);
+  document.getElementById('advice-delete').hidden = !record;
+
+  document.getElementById('advice-list-view').hidden = true;
+  document.getElementById('advice-form-view').hidden = false;
+  setThoughtModeSwitchVisible(false);
+}
+
+/* ===== 期間分析から助言を参照 ===== */
+
+let adviceReferenceToken = 0;   // 日付を素早く変えたとき、古い結果で上書きしないための札
+
+async function updateAdvicePeriodReference() {
+  const token = ++adviceReferenceToken;
+  const from = document.getElementById('period-date-from').value;
+  const to = document.getElementById('period-date-to').value;
+  const countEl = document.getElementById('period-advice-count');
+  const listEl = document.getElementById('period-advice-list');
+  const addBtn = document.getElementById('btn-period-add-advice');
+
+  if (!countEl || !listEl || !addBtn) return;
+
+  countEl.textContent = '確認中…';
+  listEl.innerHTML = '';
+  addBtn.disabled = !from || !to || from > to;
+
+  if (addBtn.disabled) {
+    countEl.textContent = '期間未指定';
+    return;
+  }
+
+  try {
+    const all = await dbGetAllAdvices();
+    if (token !== adviceReferenceToken) return;
+
+    const rows = sortAdvices(all.filter((row) => adviceOverlaps(row, from, to)));
+    countEl.textContent = `${rows.length}件`;
+
+    if (rows.length === 0) {
+      listEl.innerHTML = '<p class="settings-info">この期間に重なる先生の助言はありません。</p>';
+      return;
+    }
+
+    rows.forEach((row) => {
+      const card = document.createElement('div');
+      card.className = 'advice-reference-card';
+      card.innerHTML = `
+        <strong>${row.pinned ? '📌 ' : ''}${escapeHtml(row.title || '')}</strong>
+        <p class="settings-info">対象期間：${escapeHtml(advicePeriodLabel(row))}</p>
+        ${row.receivedDate
+          ? `<p class="settings-info">助言日：${escapeHtml(formatDateJp(row.receivedDate))}</p>`
+          : ''}
+        ${adviceTextHtml('先生からの助言', row.content)}
+        ${adviceTextHtml('自分が試すこと', row.practice)}`;
+      listEl.appendChild(card);
+    });
+  } catch (err) {
+    if (token !== adviceReferenceToken) return;
+    countEl.textContent = '取得失敗';
+    showError('期間内の先生の助言を取得できませんでした', err);
+  }
+}
+
+/* ===== 初期化：画面部品を差し込み、操作を登録する ===== */
+
+function initAdviceFeature() {
+  if (document.getElementById('thought-advice-container')) return;   // 二重追加の防止
+
+  const view = document.getElementById('view-thought');
+  const selector = view && view.querySelector('.thought-mode-selector');
+  const periodCommon = document.getElementById('period-common');
+
+  if (!view || !selector || !periodCommon) {
+    throw new Error('思考記録または期間分析の画面が見つかりません');
+  }
+
+  // 切り替えボタン
+  const modeBtn = document.createElement('button');
+  modeBtn.type = 'button';
+  modeBtn.id = 'btn-thought-mode-advice';
+  modeBtn.className = 'thought-mode-btn';
+  modeBtn.textContent = '先生の助言';
+  selector.appendChild(modeBtn);
+
+  // 助言の画面（一覧＋フォーム）
+  const container = document.createElement('div');
+  container.id = 'thought-advice-container';
+  container.hidden = true;
+  container.innerHTML = `
+    <div id="advice-list-view">
+      <p class="settings-info">
+        先生の言葉と、自分が試すことを分けて残せます。見出しをタップすると全文を読めます。
+      </p>
+      <button type="button" id="btn-new-advice" class="btn btn-primary btn-block">＋ 助言を記録する</button>
+      <ul id="advice-list" class="advice-list"></ul>
+      <p id="advice-list-empty" class="empty-msg" hidden>まだ先生の助言は記録されていません。</p>
+    </div>
+
+    <div id="advice-form-view" hidden>
+      <button type="button" id="advice-back" class="btn btn-secondary thought-back-btn">← 一覧へ戻る</button>
+
+      <form id="advice-form" class="entry-form">
+        <input type="hidden" id="advice-edit-id">
+
+        <div class="form-row form-row-range">
+          <div>
+            <label for="advice-date-from">対象期間：開始日 <span class="required">必須</span></label>
+            <input type="date" id="advice-date-from" class="date-input" required>
+          </div>
+          <div>
+            <label for="advice-date-to">対象期間：終了日 <span class="required">必須</span></label>
+            <input type="date" id="advice-date-to" class="date-input" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="advice-received-date">助言を受けた日（任意）</label>
+          <input type="date" id="advice-received-date" class="date-input">
+        </div>
+
+        <div class="form-row">
+          <label for="advice-title">見出し <span class="required">必須</span></label>
+          <input type="text" id="advice-title" maxlength="100"
+            placeholder="例：説明の前に、相手の気持ちを受け止める" required>
+        </div>
+
+        <div class="form-row">
+          <label for="advice-content">先生からの助言 <span class="required">必須</span></label>
+          <textarea id="advice-content" rows="8" required
+            placeholder="先生の言葉や、面談で教わったことを書きます。"></textarea>
+        </div>
+
+        <details id="advice-practice-details" class="thought-guide">
+          <summary>自分が試すこと（任意）</summary>
+          <div class="thought-guide-content">
+            <textarea id="advice-practice" rows="5"
+              placeholder="次に同じ場面が来たとき、具体的にどう動くか"></textarea>
+          </div>
+        </details>
+
+        <label class="advice-pin-label">
+          <input type="checkbox" id="advice-pinned">
+          📌 一覧の上に固定する
+        </label>
+
+        <div class="thought-form-actions">
+          <button type="button" id="advice-cancel" class="btn btn-secondary btn-half">キャンセル</button>
+          <button type="submit" class="btn btn-primary btn-half">💾 保存する</button>
+        </div>
+
+        <button type="button" id="advice-delete"
+          class="btn btn-danger btn-block btn-voice-delete" hidden>🗑 この助言を削除</button>
+      </form>
+    </div>`;
+  view.appendChild(container);
+
+  // 期間分析の「① 共通点」の直前に、助言の参照欄を差し込む
+  const reference = document.createElement('details');
+  reference.className = 'thought-guide period-ref-accordion';
+  reference.id = 'period-advice-reference';
+  reference.innerHTML = `
+    <summary>
+      🧑‍🏫 この期間の先生の助言
+      <span id="period-advice-count" class="advice-count">0件</span>
+    </summary>
+    <div class="thought-guide-content">
+      <p class="settings-info">
+        対象期間が少しでも重なる助言を表示します。内容の編集は「先生の助言」から行えます。
+      </p>
+      <div id="period-advice-list"></div>
+      <button type="button" id="btn-period-add-advice" class="btn btn-secondary btn-block">
+        ＋ この期間の助言を記録する
+      </button>
+    </div>`;
+  periodCommon.closest('.form-row').before(reference);
+
+  // ---- 操作の登録 ----
+  modeBtn.addEventListener('click', () => setThoughtMode('advice'));
+
+  document.getElementById('btn-new-advice').addEventListener('click', () => openAdviceForm(null));
+
+  const returnToList = () => {
+    showAdviceListView();
+    refreshAdviceList();
+  };
+  document.getElementById('advice-back').addEventListener('click', returnToList);
+  document.getElementById('advice-cancel').addEventListener('click', returnToList);
+
+  // 期間分析 → 助言の新規作成（期間を引き継ぐ）
+  document.getElementById('btn-period-add-advice').addEventListener('click', () => {
+    const dateFrom = document.getElementById('period-date-from').value;
+    const dateTo = document.getElementById('period-date-to').value;
+
+    if (!dateFrom || !dateTo || dateFrom > dateTo) {
+      showToast('正しい対象期間を指定してください');
+      return;
+    }
+    if (!confirm('先生の助言の入力へ移動します。期間分析の未保存の変更は保存されません。移動しますか？')) {
+      return;
+    }
+    setThoughtMode('advice');
+    openAdviceForm(null, { dateFrom, dateTo });
+  });
+
+  // 保存
+  document.getElementById('advice-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const idText = document.getElementById('advice-edit-id').value;
+    const dateFrom = document.getElementById('advice-date-from').value;
+    const dateTo = document.getElementById('advice-date-to').value;
+    const receivedDate = document.getElementById('advice-received-date').value;
+    const title = document.getElementById('advice-title').value.trim();
+    const content = document.getElementById('advice-content').value.trim();
+    const practice = document.getElementById('advice-practice').value.trim();
+    const pinned = document.getElementById('advice-pinned').checked;
+
+    if (!dateFrom || !dateTo) { showToast('対象期間を入力してください'); return; }
+    if (dateFrom > dateTo) { showToast('開始日は終了日以前の日付にしてください'); return; }
+    if (!title || !content) { showToast('見出しと先生からの助言を入力してください'); return; }
+
+    const saveBtn = e.currentTarget.querySelector('[type="submit"]');
+    if (saveBtn.disabled) return;
+    saveBtn.disabled = true;   // 二重タップによる二重保存の防止
+
+    try {
+      const now = new Date().toISOString();
+      const record = {
+        dateFrom, dateTo, receivedDate, title, content, practice, pinned,
+        updatedAt: now,
+        createdAt: now
+      };
+
+      if (idText) {
+        const existing = await dbGetAdviceById(Number(idText));
+        if (!existing) throw new Error('編集対象の助言が見つかりません');
+        record.id = existing.id;
+        record.createdAt = existing.createdAt || now;
+      }
+
+      await dbSaveAdvice(record);
+      showToast('先生の助言を保存しました 🧑‍🏫');
+      returnToList();
+    } catch (err) {
+      showError('先生の助言を保存できませんでした', err);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  // 削除
+  document.getElementById('advice-delete').addEventListener('click', async () => {
+    const idText = document.getElementById('advice-edit-id').value;
+    if (!idText) return;
+    if (!confirm('この先生の助言を削除します。よろしいですか？')) return;
+
+    try {
+      await dbDeleteAdvice(Number(idText));
+      showToast('先生の助言を削除しました');
+      returnToList();
+    } catch (err) {
+      showError('先生の助言を削除できませんでした', err);
     }
   });
 }
