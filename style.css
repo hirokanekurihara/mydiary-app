@@ -1401,3 +1401,10 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 @media (prefers-color-scheme: dark) {
   .episode-box { background: rgba(159, 214, 196, 0.08); border-color: rgba(159, 214, 196, 0.2); }
 }
+/* ===== 思考記録へ移行済みのボタン ===== */
+.btn-thought-migrate.migrated {
+  opacity: 0.55;
+  background: transparent;
+  border-style: dashed;
+  color: var(--color-text-sub);
+}
