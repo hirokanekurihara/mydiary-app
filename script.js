@@ -4,6 +4,17 @@
  * 日記アプリ script.js
  * ========================================================= */
 
+/** 画面に表示するバージョン。読み込まれた script.js の ?v= の値を自動で読む */
+const APP_VERSION = (() => {
+  try {
+    const src = document.currentScript && document.currentScript.src;
+    return (src && new URL(src).searchParams.get('v')) || '?';
+  } catch (e) {
+    return '?';
+  }
+})();
+
+
 /* ---------------------------------------------------------
  * 0. 共通ユーティリティ
  * --------------------------------------------------------- */
@@ -1368,6 +1379,9 @@ function initAppOnce() {
   if (appState.appInitialized) return;
   appState.appInitialized = true;
 
+  const versionEl = document.getElementById('app-version');
+  if (versionEl) versionEl.textContent = `v${APP_VERSION}`;
+
   // ★1つの関数が失敗しても、後続の処理を止めないようにするヘルパー
   const safeInit = (name, fn) => {
     try { fn(); } catch (err) { console.error(`[初期化エラー：${name}]`, err); }
@@ -2360,19 +2374,6 @@ function getEpisodesFromForm() {
   return list;
 }
 
-
-/** 表示中の入力欄から、出来事の配列を取り出す */
-function getEpisodesFromForm() {
-  const list = [];
-  for (let i = 1; i <= MAX_EPISODES; i++) {
-    if (i > 1 && document.getElementById(`episode-box-${i}`).hidden) continue;
-    list.push({
-      event: document.getElementById(`thought-event-${i}`).value.trim(),
-      praise: document.getElementById(`thought-praise-${i}`).value.trim()
-    });
-  }
-  return list;
-}
 
 /** 思考記録フォームを開く。record が null なら新規（今日の記録があれば編集モードで開く） */
 async function openThoughtForm(record) {
