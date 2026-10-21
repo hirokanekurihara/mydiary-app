@@ -1633,3 +1633,67 @@ textarea.episode-analysis-input::placeholder {
     background: rgba(230, 126, 34, 0.18);
   }
 }
+/* ===== 面談内の複数助言：編集画面 ===== */
+.meeting-item-editor {
+  margin: 0 0 14px;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid #8062ad;
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.meeting-item-editor > summary {
+  padding: 14px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.meeting-item-fields {
+  padding: 4px 14px 16px;
+}
+.meeting-item-fields label input,
+.meeting-item-fields label textarea {
+  display: block;
+  margin-top: 8px;
+}
+.meeting-practice {
+  margin-bottom: 16px;
+}
+.meeting-practice > summary {
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--color-text-sub);
+}
+.meeting-practice textarea {
+  margin-top: 8px;
+}
+.meeting-remove-item {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--color-danger);
+  background: transparent;
+  border: 1px solid var(--color-danger);
+}
+
+/* ===== 面談内の複数助言：読み返し画面 ===== */
+.meeting-read-item {
+  margin: 10px 0;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.meeting-read-item > summary {
+  padding: 12px 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.meeting-read-body {
+  padding-bottom: 10px;
+}
