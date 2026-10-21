@@ -1513,3 +1513,123 @@ textarea.episode-analysis-input::placeholder {
     border-color: #3d6a55;
   }
 }
+/* ===== 思考記録内の3つの切り替え ===== */
+.thought-mode-selector {
+  flex-wrap: wrap;
+}
+.thought-mode-selector .thought-mode-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ===== 先生の助言 ===== */
+.advice-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.advice-card,
+.advice-reference-card {
+  border: 1px solid var(--color-border);
+  border-left: 4px solid #8062ad;
+  border-radius: 12px;
+  background: var(--color-surface);
+  padding: 14px;
+  overflow-wrap: anywhere;
+}
+.advice-card.is-pinned {
+  border-left-color: #e67e22;
+  background: rgba(230, 126, 34, 0.08);
+}
+
+.advice-read > summary {
+  cursor: pointer;
+  color: var(--color-text);
+}
+.advice-card-label {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #8062ad;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.advice-card-title {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+}
+.advice-card-period {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--color-text-sub);
+}
+.advice-card-body {
+  margin-top: 16px;
+}
+.advice-text-section {
+  margin: 12px 0;
+}
+.advice-text-section > strong {
+  font-size: 13px;
+  color: var(--color-primary);
+}
+.advice-full-text {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.advice-edit-btn {
+  font-size: 13px;
+  padding: 9px 12px;
+}
+
+.advice-pin-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+.advice-pin-label input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* 期間分析内の参照欄 */
+#period-advice-reference > summary {
+  padding-right: 40px;
+}
+.advice-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-sub);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.advice-reference-card {
+  margin-bottom: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .advice-card.is-pinned {
+    background: rgba(230, 126, 34, 0.18);
+  }
+}
