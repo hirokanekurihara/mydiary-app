@@ -918,17 +918,7 @@ function renderThoughtAverages(rows) {
 function renderSearchThoughtCards(listEl, rows) {
   listEl.innerHTML = '';
   rows.forEach((row) => {
-    const preview = (row.event || '').replace(/\n/g, ' ');
-    const scoreText = [
-      row.pac            != null ? `②PAC：${row.pac}` : '',
-      row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
-      row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
-      row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
-      row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
-      row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
-      row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
-      row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
-    ].filter(Boolean).join('　');
+    const summary = buildThoughtEpisodeSummary(row);
 
     const li = document.createElement('li');
     li.className = 'thought-entry-item';
@@ -936,18 +926,18 @@ function renderSearchThoughtCards(listEl, rows) {
       <div class="thought-entry-head">
         <span class="thought-badge">🧠 思考記録</span>
         <span class="entry-date-label">${escapeHtml(formatDateJp(row.date))}</span>
+        ${summary.badgesHtml}
       </div>
-      <div class="thought-entry-scores">${escapeHtml(scoreText)}</div>
-      <div class="thought-entry-preview">${escapeHtml(preview)}</div>
-    `;
+      <div class="thought-entry-scores">${escapeHtml(buildThoughtScoreText(row))}</div>
+      <div class="thought-episode-list">${summary.listHtml}</div>`;
     li.addEventListener('click', () => {
       switchView('view-thought');   // 先に思考記録タブへ移動する
       openThoughtForm(row);
     });
-
     listEl.appendChild(li);
   });
 }
+
 
 
 /** ラケット感情の検索結果を一覧カードとして描画する（①②③の内容を表示） */
@@ -2575,6 +2565,55 @@ async function openThoughtForm(record) {
   }
   showThoughtFormView();
 }
+/** 点数の1行表示（日々の一覧と検索結果で共用） */
+function buildThoughtScoreText(row) {
+  return [
+    row.pac            != null ? `②PAC：${row.pac}` : '',
+    row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
+    row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
+    row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
+    row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
+    row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
+    row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
+    row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
+  ].filter(Boolean).join('　');
+}
+
+/** 出来事1件の分析入力数（共通点・気づき・反省のうち、空白以外の文字がある数）を返す */
+function countEpisodeAnalysis(ep) {
+  const a = getEpisodeAnalysis(ep);
+  return [a.common, a.insight, a.action].filter((t) => t.trim() !== '').length;
+}
+
+/**
+ * 一覧カード用の表示部品を作る（日々の一覧と検索結果で共用）
+ *  badgesHtml : カード上部の「出来事 N件」「分析完了 X/N件」
+ *  listHtml   : 出来事ごとの本文プレビューと分析状況
+ */
+function buildThoughtEpisodeSummary(row) {
+  const episodes = getThoughtEpisodes(row).filter(hasEpisodeContent);
+  const total = episodes.length;
+  const completed = episodes.filter((ep) => countEpisodeAnalysis(ep) === 3).length;
+
+  const badgesHtml = `
+    <span class="episode-count-badge">出来事 ${total}件</span>
+    <span class="analysis-total-badge ${total > 0 && completed === total ? 'complete' : ''}">分析完了 ${completed}/${total}件</span>`;
+
+  const listHtml = episodes.map((ep, i) => {
+    const n = countEpisodeAnalysis(ep);
+    const status = n === 0 ? 'empty' : n === 3 ? 'complete' : 'partial';
+    const label = n === 0 ? '未分析 0/3' : n === 3 ? '分析済み 3/3' : `一部分析 ${n}/3`;
+    const text = (ep.event || '').replace(/\s+/g, ' ').trim() || '（出来事の本文なし）';
+
+    return `
+      <div class="thought-episode-item">
+        <p class="thought-episode-text"><strong>出来事${i + 1}</strong>${escapeHtml(text)}</p>
+        <span class="thought-episode-status" data-status="${status}">${label}</span>
+      </div>`;
+  }).join('');
+
+  return { badgesHtml, listHtml };
+}
 
 async function refreshThoughtList() {
   const listEl = document.getElementById('thought-list');
@@ -2583,21 +2622,7 @@ async function refreshThoughtList() {
     const rows = await dbGetAllThoughts();
     listEl.innerHTML = '';
     rows.forEach((row) => {
-      const episodes = getThoughtEpisodes(row).filter(hasEpisodeContent);
-      const preview = episodes
-        .map((ep, i) => `#${i + 1} ${(ep.event || '').replace(/\n/g, ' ')}`)
-        .join('　｜　');
-      const scoreText = [
-        row.pac            != null ? `②PAC：${row.pac}` : '',
-        row.parallelFamily != null ? `③平行交流(家族)：${row.parallelFamily}` : '',
-        row.parallelOther  != null ? `③平行交流(他者)：${row.parallelOther}` : '',
-        row.objectivity    != null ? `④客観性(A)：${row.objectivity}` : '',
-        row.selfAffirm     != null ? `⑤自己肯定：${row.selfAffirm}` : '',
-        row.otherAffirm    != null ? `⑥他者肯定：${row.otherAffirm}` : '',
-        row.emotion        != null ? `⑦感情表現(FC)：${row.emotion}` : '',
-        row.mood           != null ? `⑧気分点数：${row.mood > 0 ? '+' : ''}${row.mood}` : ''
-      ].filter(Boolean).join('　');
-      const countBadge = episodes.length > 1 ? `<span class="episode-count-badge">出来事${episodes.length}件</span>` : '';
+      const summary = buildThoughtEpisodeSummary(row);
 
       const li = document.createElement('li');
       li.className = 'thought-entry-item';
@@ -2605,10 +2630,10 @@ async function refreshThoughtList() {
         <div class="thought-entry-head">
           <span class="thought-badge">🧠 思考記録</span>
           <span class="entry-date-label">${escapeHtml(formatDateJp(row.date))}</span>
-          ${countBadge}
+          ${summary.badgesHtml}
         </div>
-        <div class="thought-entry-scores">${escapeHtml(scoreText)}</div>
-        <div class="thought-entry-preview">${escapeHtml(preview)}</div>
+        <div class="thought-entry-scores">${escapeHtml(buildThoughtScoreText(row))}</div>
+        <div class="thought-episode-list">${summary.listHtml}</div>
         <div class="thought-entry-actions">
           <button type="button" class="btn-thought-delete" data-date="${escapeHtml(row.date)}">🗑 削除</button>
         </div>`;
@@ -2623,6 +2648,7 @@ async function refreshThoughtList() {
     showError('思考記録一覧の取得に失敗しました', err);
   }
 }
+
 
 /* ===== 期間分析 ===== */
 let periodRefToken = 0;   // 日付を素早く変えたとき、古い結果で上書きしないための札
