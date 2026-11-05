@@ -1418,6 +1418,7 @@ function initAppOnce() {
 
   safeInit('initTabs', initTabs);
   safeInit('initWriteForm', initWriteForm);
+  safeInit('initPolishCopyButton', initPolishCopyButton);
   safeInit('initListView', initListView);
   safeInit('initDetailModal', initDetailModal);
   safeInit('initEditModal', initEditModal);
@@ -3949,5 +3950,96 @@ function initAdviceFeature() {
     if (!isAdviceFormDirty()) return;
     e.preventDefault();
     e.returnValue = '';
+  });
+}
+
+/* ---------------------------------------------------------
+ * 整文用コピー：依頼文と日記本文をまとめてコピー
+ * --------------------------------------------------------- */
+
+/** AIに渡す整文用の文章を作る（本文は普通の区切り文字で挟む） */
+function buildPolishPrompt(body) {
+  return [
+    '以下は音声入力した日記です。',
+    '意味や気持ちは変えずに、誤変換と読みにくい部分だけ整えてください。',
+    '事実・感情・人物関係を追加したり、推測したりしないでください。',
+    '',
+    '整えた文章だけを、コピー用のコードブロック1つに入れて返してください。',
+    '前置き・解説・見出し・修正点の説明は、コードブロックの外にも中にも付けないでください。',
+    '',
+    '【本文ここから】',
+    body,
+    '【本文ここまで】'
+  ].join('\n');
+}
+
+/** 文章をクリップボードにコピーする。通常の方法が使えなければ、予備の方法を試す */
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (err) {
+      console.warn('通常のコピーに失敗したため、予備の方法を試します', err);
+    }
+  }
+
+  const temp = document.createElement('textarea');
+  temp.value = text;
+  temp.readOnly = true;
+  temp.style.cssText =
+    'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;';
+
+  const previousFocus = document.activeElement;
+  document.body.appendChild(temp);
+
+  try {
+    temp.focus();
+    temp.select();
+    temp.setSelectionRange(0, temp.value.length);
+    if (!document.execCommand('copy')) {
+      throw new Error('予備のコピー処理にも失敗しました');
+    }
+  } finally {
+    temp.remove();
+    if (previousFocus && typeof previousFocus.focus === 'function') {
+      previousFocus.focus({ preventScroll: true });
+    }
+  }
+}
+
+/** 「書く」の本文欄の下に、［📋 整文用にコピー］ボタンを差し込む */
+function initPolishCopyButton() {
+  if (document.getElementById('btn-copy-for-polish')) return;   // 二重追加の防止
+
+  const bodyEl = document.getElementById('entry-body');
+  if (!bodyEl) {
+    console.error('整文用コピー：本文の入力欄が見つかりません');
+    return;
+  }
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = 'btn-copy-for-polish';
+  button.className = 'btn btn-secondary btn-block';
+  button.textContent = '📋 整文用にコピー';
+  bodyEl.insertAdjacentElement('afterend', button);
+
+  button.addEventListener('click', async () => {
+    const body = bodyEl.value.trim();
+    if (!body) {
+      showToast('先に本文を入力してください');
+      return;
+    }
+
+    button.disabled = true;   // 連打防止
+    try {
+      await copyTextToClipboard(buildPolishPrompt(body));
+      showToast('依頼文と本文をコピーしました。Gensparkなどに貼り付けてください 📋', 4000);
+    } catch (err) {
+      showError('コピーできませんでした。本文を長押ししてコピーしてください', err);
+    } finally {
+      button.disabled = false;
+    }
   });
 }
