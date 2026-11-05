@@ -1422,6 +1422,7 @@ function initAppOnce() {
   safeInit('initListView', initListView);
   safeInit('initDetailModal', initDetailModal);
   safeInit('initEditModal', initEditModal);
+  safeInit('initEditPolishCopyButton', initEditPolishCopyButton);
   safeInit('initCalendarView', initCalendarView);
   safeInit('initSearchView', initSearchView);
   safeInit('initSettingsView', initSettingsView);
@@ -4034,6 +4035,43 @@ function initPolishCopyButton() {
 
     button.disabled = true;   // 連打防止
     try {
+      await copyTextToClipboard(buildPolishPrompt(body));
+      showToast('依頼文と本文をコピーしました。Gensparkなどに貼り付けてください 📋', 4000);
+    } catch (err) {
+      showError('コピーできませんでした。本文を長押ししてコピーしてください', err);
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+/** 日記の編集画面の本文欄の下に、［📋 整文用にコピー］ボタンを追加する */
+function initEditPolishCopyButton() {
+  if (document.getElementById('btn-copy-for-polish-edit')) return;   // 二重追加の防止
+
+  const bodyEl = document.getElementById('edit-body');
+  if (!bodyEl) {
+    console.error('編集用の整文コピー：本文欄が見つかりません');
+    return;
+  }
+
+  const button = document.createElement('button');
+  button.type = 'button';   // フォームの送信（保存）を起こさない
+  button.id = 'btn-copy-for-polish-edit';
+  button.className = 'btn btn-secondary btn-block';
+  button.textContent = '📋 整文用にコピー';
+  bodyEl.insertAdjacentElement('afterend', button);
+
+  button.addEventListener('click', async () => {
+    const body = bodyEl.value.trim();
+    if (!body) {
+      showToast('先に本文を入力してください');
+      return;
+    }
+
+    button.disabled = true;   // 連打防止
+    try {
+      // 「書く」画面と同じ依頼文・コピー処理を使う
       await copyTextToClipboard(buildPolishPrompt(body));
       showToast('依頼文と本文をコピーしました。Gensparkなどに貼り付けてください 📋', 4000);
     } catch (err) {
