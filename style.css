@@ -1784,3 +1784,20 @@ textarea.episode-analysis-input::placeholder {
     border-color: #3d6a55;
   }
 }
+
+/* 記録一覧の日付欄：iPhoneでの横幅はみ出し対策 */
+#view-list .list-controls {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+#view-list #list-date-picker {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
