@@ -1801,3 +1801,14 @@ textarea.episode-analysis-input::placeholder {
   -webkit-appearance: none;
   appearance: none;
 }
+
+/* 思考記録の日付欄：iPhoneでの横幅はみ出し対策 */
+#view-thought #thought-date {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
